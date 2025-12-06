@@ -173,6 +173,15 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProject, on
                                         onChange={e => setNewProject({...newProject, startDate: e.target.value})}
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                    <input
+                                        type="date"
+                                        className="w-full border rounded-lg p-2"
+                                        value={newProject.endDate}
+                                        onChange={e => setNewProject({...newProject, endDate: e.target.value})}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="mt-6 flex justify-end gap-3">

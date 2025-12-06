@@ -58,7 +58,13 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onNavigate, curr
 
                 <div className="p-4 border-t border-gray-200">
                     <div className="flex items-center gap-3">
-                        <img src={currentUser.avatar} alt="User" className="w-10 h-10 rounded-full bg-gray-200 object-cover" />
+                        {currentUser.avatar ? (
+                            <img src={currentUser.avatar} alt="User" className="w-10 h-10 rounded-full bg-gray-200 object-cover" />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                                {currentUser.name.charAt(0).toUpperCase()}
+                            </div>
+                        )}
                         {isSidebarOpen && (
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">{currentUser.name}</p>

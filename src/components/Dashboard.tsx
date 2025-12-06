@@ -1,5 +1,5 @@
 import React from 'react';
-import { Project, Task } from '../types';
+import { Project, Task, ProjectStatus, TaskStatus } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
@@ -11,9 +11,9 @@ interface DashboardProps {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
 const Dashboard: React.FC<DashboardProps> = ({ projects, tasks }) => {
-    const activeProjects = projects.filter(p => p.status === 'ACTIVE').length;
-    const completedProjects = projects.filter(p => p.status === 'COMPLETED').length;
-    const pendingTasks = tasks.filter(t => t.status !== 'DONE').length;
+    const activeProjects = projects.filter(p => p.status === ProjectStatus.ACTIVE).length;
+    const completedProjects = projects.filter(p => p.status === ProjectStatus.COMPLETED).length;
+    const pendingTasks = tasks.filter(t => t.status !== TaskStatus.DONE).length;
 
     const budgetData = projects.map(p => ({
         name: p.code,
@@ -24,8 +24,8 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, tasks }) => {
     const statusData = [
         { name: 'Active', value: activeProjects },
         { name: 'Completed', value: completedProjects },
-        { name: 'On Hold', value: projects.filter(p => p.status === 'ON_HOLD').length },
-        { name: 'Draft', value: projects.filter(p => p.status === 'DRAFT').length },
+        { name: 'On Hold', value: projects.filter(p => p.status === ProjectStatus.ON_HOLD).length },
+        { name: 'Draft', value: projects.filter(p => p.status === ProjectStatus.DRAFT).length },
     ];
 
     const StatCard = ({ title, value, icon: Icon, color, subtext }: any) => (
