@@ -1,11 +1,7 @@
-import React, { useState } from 'react';
-import {
-    MOCK_USERS,
-    MOCK_PROJECTS,
-    MOCK_TASKS,
-    MOCK_CRS,
-    MOCK_TIMESHEETS
-} from './services/mockData';
+import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from './lib/supabaseClient';
+import { dbService } from './services/dbService';
 import {
     Project,
     Task,
@@ -19,113 +15,177 @@ import ProjectList from './components/ProjectList';
 import ProjectDetail from './components/ProjectDetail';
 import ChangeRequests from './components/ChangeRequests';
 import Timesheets from './components/Timesheets';
+import Auth from './components/Auth';
 
-type Page = 'dashboard' | 'projects' | 'project-detail' | 'changes' | 'timesheets' | 'settings';
+function AppContent() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [session, setSession] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-function App() {
-    const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-    const [currentUser] = useState(MOCK_USERS[1]);
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [crs, setCrs] = useState<ChangeRequest[]>([]);
+    const [timesheets, setTimesheets] = useState<any[]>([]);
 
-    const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-    const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
-    const [crs, setCrs] = useState<ChangeRequest[]>(MOCK_CRS);
+    useEffect(() => {
+        // Handle Auth state
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
 
-    const handleNavigate = (page: string) => {
-        setCurrentPage(page as Page);
-        if (page !== 'project-detail') setSelectedProjectId(null);
-    };
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
 
-    const handleProjectSelect = (id: string) => {
-        setSelectedProjectId(id);
-        setCurrentPage('project-detail');
-    };
+        return () => subscription.unsubscribe();
+    }, []);
 
-    const handleAddProject = (p: Partial<Project>) => {
-        const newProject: Project = {
-            ...p as Project,
-            id: `p${Date.now()}`,
-            code: `PRJ-2024-${Math.floor(Math.random() * 1000)}`,
-            status: p.status || ProjectStatus.DRAFT,
-            progress: 0,
-            managerId: currentUser.id
+    useEffect(() => {
+        if (!session) return;
+
+        const loadInitialData = async () => {
+            try {
+                const [fetchedProjects, fetchedTasks, fetchedCrs, fetchedTimesheets] = await Promise.all([
+                    dbService.getProjects(),
+                    dbService.getTasks(),
+                    dbService.getChangeRequests(),
+                    dbService.getTimesheets()
+                ]);
+                setProjects(fetchedProjects);
+                setTasks(fetchedTasks);
+                setCrs(fetchedCrs);
+                setTimesheets(fetchedTimesheets);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            } finally {
+                setLoading(false);
+            }
         };
-        setProjects([...projects, newProject]);
+
+        loadInitialData();
+    }, [session]);
+
+    if (!session) {
+        return <Auth />;
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    const currentPath = location.pathname.split('/')[1] || 'dashboard';
+
+    const handleAddProject = async (p: Partial<Project>) => {
+        try {
+            const projectData = {
+                ...p,
+                code: `PRJ-2024-${Math.floor(Math.random() * 1000)}`,
+                status: p.status || ProjectStatus.DRAFT,
+                progress: 0,
+                managerId: session.user.id
+            };
+            const newProject = await dbService.addProject(projectData as Project);
+            setProjects([newProject, ...projects]);
+        } catch (error) {
+            console.error('Error adding project:', error);
+        }
     };
 
-    const handleAddTask = (t: Partial<Task>) => {
-        const newTask: Task = {
-            ...t as Task,
-            id: `t${Date.now()}`,
-            progress: 0
-        };
-        setTasks([...tasks, newTask]);
+    const handleAddTask = async (t: Partial<Task>) => {
+        try {
+            const newTask = await dbService.addTask(t);
+            setTasks([...tasks, newTask]);
+        } catch (error) {
+            console.error('Error adding task:', error);
+        }
     };
 
-    const handleUpdateTask = (taskId: string, updates: Partial<Task>) => {
-        setTasks(tasks.map(t => t.id === taskId ? { ...t, ...updates } : t));
+    const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+        try {
+            await dbService.updateTask(taskId, updates);
+            setTasks(tasks.map(t => t.id === taskId ? { ...t, ...updates } : t));
+        } catch (error) {
+            console.error('Error updating task:', error);
+        }
     };
 
     const handleApproveCR = (id: string) => {
         setCrs(crs.map(cr => cr.id === id ? { ...cr, status: CRStatus.APPROVED } : cr));
-        const cr = crs.find(c => c.id === id);
-        if (cr) {
-            setProjects(projects.map(p =>
-                p.id === cr.projectId
-                    ? { ...p, budget: p.budget + cr.costImpact }
-                    : p
-            ));
-        }
     };
 
     const handleRejectCR = (id: string) => {
         setCrs(crs.map(cr => cr.id === id ? { ...cr, status: CRStatus.REJECTED } : cr));
     };
 
-    const renderContent = () => {
-        switch (currentPage) {
-            case 'dashboard':
-                return <Dashboard projects={projects} tasks={tasks} />;
-            case 'projects':
-                return <ProjectList projects={projects} onSelectProject={handleProjectSelect} onAddProject={handleAddProject} />;
-            case 'project-detail':
-                const project = projects.find(p => p.id === selectedProjectId);
-                if (!project) return <div>Project not found</div>;
-                return (
-                    <ProjectDetail
-                        project={project}
-                        tasks={tasks.filter(t => t.projectId === project.id)}
+    return (
+        <Layout
+            currentUser={{
+                id: session.user.id,
+                name: session.user.user_metadata.name || session.user.email,
+                email: session.user.email,
+                role: 'ADMIN' as any,
+                avatar: `https://ui-avatars.com/api/?name=${session.user.user_metadata.name || session.user.email}&background=3b82f6&color=fff`
+            }}
+            onNavigate={(page) => navigate(`/${page}`)}
+            currentPage={currentPath}
+        >
+            <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard projects={projects} tasks={tasks} />} />
+                <Route path="/projects" element={<ProjectList projects={projects} onSelectProject={(id) => navigate(`/projects/${id}`)} onAddProject={handleAddProject} />} />
+                <Route path="/projects/:id" element={
+                    <ProjectDetailWrapper
+                        projects={projects}
+                        tasks={tasks}
                         onAddTask={handleAddTask}
-                        onUpdateProject={() => {}}
                         onUpdateTask={handleUpdateTask}
                     />
-                );
-            case 'changes':
-                return <ChangeRequests crs={crs} onApprove={handleApproveCR} onReject={handleRejectCR} />;
-            case 'timesheets':
-                return <Timesheets entries={MOCK_TIMESHEETS} projects={projects} tasks={tasks} />;
-            case 'settings':
-                return (
+                } />
+                <Route path="/changes" element={<ChangeRequests crs={crs} onApprove={handleApproveCR} onReject={handleRejectCR} />} />
+                <Route path="/timesheets" element={<Timesheets entries={timesheets} projects={projects} tasks={tasks} />} />
+                <Route path="/settings" element={
                     <div className="p-8 text-center text-gray-500">
                         <h2 className="text-xl font-bold text-gray-900 mb-2">System Configuration</h2>
-                        <p>Webhook configuration and RBAC settings would go here.</p>
-                        <div className="mt-8 bg-white p-6 rounded-lg border max-w-2xl mx-auto text-left">
-                            <h3 className="font-mono text-sm font-bold mb-2">Integration Points (OpenAPI)</h3>
-                            <code className="block bg-gray-100 p-4 rounded text-xs font-mono">
-                                POST /webhooks/subscribe {"{ event: 'project.closed', url: 'https://finance.nexus/api/close' }"}
-                            </code>
-                        </div>
+                        <button
+                            onClick={() => supabase.auth.signOut()}
+                            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                        >
+                            Log Out
+                        </button>
                     </div>
-                );
-            default:
-                return <div>Page not found</div>;
-        }
-    };
-
-    return (
-        <Layout currentUser={currentUser} onNavigate={handleNavigate} currentPage={currentPage}>
-            {renderContent()}
+                } />
+            </Routes>
         </Layout>
+    );
+}
+
+function ProjectDetailWrapper({ projects, tasks, onAddTask, onUpdateTask }: any) {
+    const { id } = useParams();
+    const project = projects.find((p: any) => p.id === id);
+    if (!project) return <div>Project not found</div>;
+    return (
+        <ProjectDetail
+            project={project}
+            tasks={tasks.filter((t: any) => t.projectId === project.id)}
+            onAddTask={onAddTask}
+            onUpdateProject={() => { }}
+            onUpdateTask={onUpdateTask}
+        />
+    );
+}
+
+import { useParams } from 'react-router-dom';
+
+function App() {
+    return (
+        <Router>
+            <AppContent />
+        </Router>
     );
 }
 

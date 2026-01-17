@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Project, Task, TaskStatus } from '../types';
 import { generateProjectWBS, generateStatusReport } from '../services/geminiService';
-import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search, Users } from 'lucide-react';
+import CollaboratorManagement from './CollaboratorManagement';
 
 interface ProjectDetailProps {
     project: Project;
@@ -36,7 +37,7 @@ const TASK_STYLES = {
 };
 
 const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask, onUpdateProject, onUpdateTask }) => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'wbs' | 'gantt'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'wbs' | 'gantt' | 'collaborators'>('overview');
     const [isGeneratingWBS, setIsGeneratingWBS] = useState(false);
     const [reportText, setReportText] = useState('');
 
@@ -338,15 +339,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                         { id: 'overview', label: 'Overview', icon: BarChart2 },
                         { id: 'wbs', label: 'WBS & Tasks', icon: CheckSquare },
                         { id: 'gantt', label: 'Gantt Chart', icon: Calendar },
+                        { id: 'collaborators', label: 'Collaborators', icon: Users },
                     ].map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                                activeTab === tab.id
+                            className={`flex items-center gap-2 pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.id
                                     ? 'border-blue-600 text-blue-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700'
-                            }`}
+                                }`}
                         >
                             <tab.icon size={18} />
                             {tab.label}
@@ -404,61 +405,60 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                         <div className="border rounded-lg overflow-x-auto">
                             <table className="w-full text-sm text-left min-w-[600px]">
                                 <thead className="bg-gray-50 text-gray-700 font-medium">
-                                <tr>
-                                    <th className="px-4 py-3">Task Name</th>
-                                    <th className="px-4 py-3">Assignee</th>
-                                    <th className="px-4 py-3">Dependencies</th>
-                                    <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3 w-40">Progress</th>
-                                </tr>
+                                    <tr>
+                                        <th className="px-4 py-3">Task Name</th>
+                                        <th className="px-4 py-3">Assignee</th>
+                                        <th className="px-4 py-3">Dependencies</th>
+                                        <th className="px-4 py-3">Status</th>
+                                        <th className="px-4 py-3 w-40">Progress</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                {tasks.length === 0 && (
-                                    <tr><td colSpan={5} className="p-4 text-center text-gray-500">No tasks defined yet.</td></tr>
-                                )}
-                                {tasks.map(t => (
-                                    <tr key={t.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                                        <td className="px-4 py-3 text-gray-500">{t.assigneeId ? 'Charlie Dev' : 'Unassigned'}</td>
-                                        <td className="px-4 py-3 text-gray-500">
-                                            {t.dependencies?.length ? (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {t.dependencies.map(depId => {
-                                                        const depTask = tasks.find(tsk => tsk.id === depId);
-                                                        return depTask ? (
-                                                            <span key={depId} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded border border-gray-200">
-                                                            {depTask.name.substring(0, 10)}{depTask.name.length > 10 ? '...' : ''}
-                                                        </span>
-                                                        ) : null;
-                                                    })}
+                                    {tasks.length === 0 && (
+                                        <tr><td colSpan={5} className="p-4 text-center text-gray-500">No tasks defined yet.</td></tr>
+                                    )}
+                                    {tasks.map(t => (
+                                        <tr key={t.id} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
+                                            <td className="px-4 py-3 text-gray-500">{t.assigneeId ? 'Charlie Dev' : 'Unassigned'}</td>
+                                            <td className="px-4 py-3 text-gray-500">
+                                                {t.dependencies?.length ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {t.dependencies.map(depId => {
+                                                            const depTask = tasks.find(tsk => tsk.id === depId);
+                                                            return depTask ? (
+                                                                <span key={depId} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded border border-gray-200">
+                                                                    {depTask.name.substring(0, 10)}{depTask.name.length > 10 ? '...' : ''}
+                                                                </span>
+                                                            ) : null;
+                                                        })}
+                                                    </div>
+                                                ) : <span className="text-gray-400 italic">None</span>}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`px-2 py-0.5 rounded text-xs border ${t.status === TaskStatus.DONE ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        t.status === TaskStatus.IN_PROGRESS ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            'bg-gray-50 text-gray-600 border-gray-200'
+                                                    }`}>
+                                                    {t.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="100"
+                                                        step="5"
+                                                        value={t.progress}
+                                                        onChange={(e) => handleUpdateProgress(t.id, parseInt(e.target.value))}
+                                                        className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:bg-gray-300 transition-colors"
+                                                    />
+                                                    <span className="text-xs font-medium text-gray-700 w-8 text-right">{t.progress}%</span>
                                                 </div>
-                                            ) : <span className="text-gray-400 italic">None</span>}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                        <span className={`px-2 py-0.5 rounded text-xs border ${
-                                            t.status === TaskStatus.DONE ? 'bg-green-50 text-green-700 border-green-200' :
-                                                t.status === TaskStatus.IN_PROGRESS ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                    'bg-gray-50 text-gray-600 border-gray-200'
-                                        }`}>
-                                            {t.status}
-                                        </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="100"
-                                                    step="5"
-                                                    value={t.progress}
-                                                    onChange={(e) => handleUpdateProgress(t.id, parseInt(e.target.value))}
-                                                    className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:bg-gray-300 transition-colors"
-                                                />
-                                                <span className="text-xs font-medium text-gray-700 w-8 text-right">{t.progress}%</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -674,14 +674,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                                                             {(!isDraggingMove && !isResizingLeft && !isResizingRight && draggedTaskId !== task.id) && (
                                                                 <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-50 pointer-events-none">
                                                                     {new Date(task.startDate).toLocaleDateString()} - {new Date(task.endDate).toLocaleDateString()}
-                                                                    <br/>{task.progress}% Complete
+                                                                    <br />{task.progress}% Complete
                                                                 </div>
                                                             )}
 
                                                             {(currentWidth > 40 && viewMode === 'comfortable') && (
                                                                 <span className={`relative z-10 px-2 truncate font-medium mix-blend-multiply ${style.text}`}>
-                                                            {task.progress}%
-                                                        </span>
+                                                                    {task.progress}%
+                                                                </span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -693,6 +693,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                             </div>
                         </div>
                     </div>
+                )}
+
+                {activeTab === 'collaborators' && (
+                    <CollaboratorManagement projectId={project.id} />
                 )}
             </div>
 
@@ -757,7 +761,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                                     type="text"
                                     className="w-full border rounded-lg p-2"
                                     value={newTask.name}
-                                    onChange={e => setNewTask({...newTask, name: e.target.value})}
+                                    onChange={e => setNewTask({ ...newTask, name: e.target.value })}
                                 />
                             </div>
 
@@ -768,7 +772,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                                         type="date"
                                         className="w-full border rounded-lg p-2"
                                         value={newTask.startDate}
-                                        onChange={e => setNewTask({...newTask, startDate: e.target.value})}
+                                        onChange={e => setNewTask({ ...newTask, startDate: e.target.value })}
                                     />
                                 </div>
                                 <div>
@@ -777,7 +781,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                                         type="date"
                                         className="w-full border rounded-lg p-2"
                                         value={newTask.endDate}
-                                        onChange={e => setNewTask({...newTask, endDate: e.target.value})}
+                                        onChange={e => setNewTask({ ...newTask, endDate: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -787,7 +791,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, onAddTask
                                 <select
                                     className="w-full border rounded-lg p-2"
                                     value={newTask.status}
-                                    onChange={e => setNewTask({...newTask, status: e.target.value as TaskStatus})}
+                                    onChange={e => setNewTask({ ...newTask, status: e.target.value as TaskStatus })}
                                 >
                                     {Object.values(TaskStatus).map(s => (
                                         <option key={s} value={s}>{s}</option>
