@@ -21,6 +21,7 @@ function AppContent() {
     const navigate = useNavigate();
     const location = useLocation();
     const [session, setSession] = useState<any>(null);
+    const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     const [projects, setProjects] = useState<Project[]>([]);
@@ -46,8 +47,11 @@ function AppContent() {
 
         const loadInitialData = async () => {
             try {
+                const userProfile = await dbService.getProfile(session.user.id);
+                setProfile(userProfile);
+
                 const [fetchedProjects, fetchedTasks, fetchedCrs, fetchedTimesheets] = await Promise.all([
-                    dbService.getProjects(),
+                    dbService.getProjects(session.user.id, userProfile.role),
                     dbService.getTasks(),
                     dbService.getChangeRequests(),
                     dbService.getTimesheets()
@@ -126,10 +130,10 @@ function AppContent() {
         <Layout
             currentUser={{
                 id: session.user.id,
-                name: session.user.user_metadata.name || session.user.email,
+                name: profile?.name || session.user.user_metadata.name || session.user.email,
                 email: session.user.email,
-                role: 'ADMIN' as any,
-                avatar: `https://ui-avatars.com/api/?name=${session.user.user_metadata.name || session.user.email}&background=3b82f6&color=fff`
+                role: profile?.role || 'MEMBER',
+                avatar: `https://ui-avatars.com/api/?name=${profile?.name || session.user.email}&background=3b82f6&color=fff`
             }}
             onNavigate={(page) => navigate(`/${page}`)}
             currentPage={currentPath}

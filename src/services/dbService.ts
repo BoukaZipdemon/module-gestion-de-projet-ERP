@@ -2,12 +2,34 @@ import { supabase } from '../lib/supabaseClient';
 import { Project, Task, ChangeRequest, TimesheetEntry } from '../types';
 
 export const dbService = {
-    // Projects
-    async getProjects(): Promise<Project[]> {
+    // Profiles
+    async getProfile(userId: string): Promise<any> {
         const { data, error } = await supabase
-            .from('projects')
+            .from('profiles')
             .select('*')
-            .order('created_at', { ascending: false });
+            .eq('id', userId)
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    // Projects
+    async getProjects(userId?: string, role?: string): Promise<Project[]> {
+        let query = supabase.from('projects').select('*');
+
+        // If not admin and userId is provided, filter projects the user is a member of
+        if (role !== 'ADMIN' && userId) {
+            const { data: memberProjects, error: memberError } = await supabase
+                .from('project_members')
+                .select('project_id')
+                .eq('user_id', userId);
+
+            if (memberError) throw memberError;
+            const projectIds = memberProjects.map(mp => mp.project_id);
+            query = query.in('id', projectIds);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -193,5 +215,13 @@ export const dbService = {
             .eq('project_id', projectId);
         if (error) throw error;
         return data;
+    },
+
+    async updateProjectMemberRole(memberId: string, role: string): Promise<void> {
+        const { error } = await supabase
+            .from('project_members')
+            .update({ role })
+            .eq('id', memberId);
+        if (error) throw error;
     }
 };

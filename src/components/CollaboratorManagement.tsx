@@ -11,6 +11,7 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [selectedRole, setSelectedRole] = useState('MEMBER');
 
     useEffect(() => {
         loadMembers();
@@ -40,12 +41,22 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
 
     const addMember = async (userId: string) => {
         try {
-            await dbService.addProjectMember(projectId, userId);
+            await dbService.addProjectMember(projectId, userId, selectedRole);
             setSearchResults([]);
             setEmailSearch('');
             loadMembers();
         } catch (error) {
             alert('User is already a member or error occurred');
+        }
+    };
+
+    const updateRole = async (memberId: string, newRole: string) => {
+        try {
+            await dbService.updateProjectMemberRole(memberId, newRole);
+            loadMembers();
+        } catch (error) {
+            console.error('Error updating role:', error);
+            alert('Failed to update role');
         }
     };
 
@@ -68,6 +79,15 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         />
                     </div>
+                    <select
+                        className="border rounded-lg px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={selectedRole}
+                        onChange={(e) => setSelectedRole(e.target.value)}
+                    >
+                        <option value="MEMBER">Member</option>
+                        <option value="VIEWER">Viewer</option>
+                        <option value="OWNER">Owner</option>
+                    </select>
                     <button
                         onClick={handleSearch}
                         disabled={loading}
@@ -92,7 +112,7 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
                                     onClick={() => addMember(user.id)}
                                     className="px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-md hover:bg-green-100"
                                 >
-                                    Add to Project
+                                    Add as {selectedRole.toLowerCase()}
                                 </button>
                             </div>
                         ))}
@@ -107,16 +127,29 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {members.map((member) => (
-                        <div key={member.id} className="p-4 border rounded-xl flex items-center gap-4 bg-white shadow-sm">
-                            <img
-                                src={member.profiles?.avatar || `https://ui-avatars.com/api/?name=${member.profiles?.name}`}
-                                className="w-10 h-10 rounded-full border border-gray-100"
-                            />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{member.profiles?.name}</p>
-                                <p className="text-xs text-gray-500 truncate">{member.profiles?.email}</p>
-                                <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded uppercase tracking-wider font-bold">
-                                    {member.role}
+                        <div key={member.id} className="p-4 border rounded-xl flex flex-col gap-4 bg-white shadow-sm">
+                            <div className="flex items-center gap-4">
+                                <img
+                                    src={member.profiles?.avatar || `https://ui-avatars.com/api/?name=${member.profiles?.name}`}
+                                    className="w-10 h-10 rounded-full border border-gray-100"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{member.profiles?.name}</p>
+                                    <p className="text-xs text-gray-500 truncate">{member.profiles?.email}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                                <select
+                                    className="text-xs bg-gray-50 border-none rounded px-2 py-1 font-bold text-gray-600 uppercase tracking-wider outline-none focus:ring-1 focus:ring-blue-500"
+                                    value={member.role}
+                                    onChange={(e) => updateRole(member.id, e.target.value)}
+                                >
+                                    <option value="MEMBER">Member</option>
+                                    <option value="VIEWER">Viewer</option>
+                                    <option value="OWNER">Owner</option>
+                                </select>
+                                <span className="text-[10px] text-gray-400">
+                                    Joined {new Date(member.created_at).toLocaleDateString()}
                                 </span>
                             </div>
                         </div>

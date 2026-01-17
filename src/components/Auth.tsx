@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { Shield } from 'lucide-react';
 
 export default function Auth() {
     const [loading, setLoading] = useState(false);
@@ -7,6 +8,12 @@ export default function Auth() {
     const [password, setPassword] = useState('');
     const [isSignUp, setIsSignUp] = useState(false);
     const [name, setName] = useState('');
+
+    const fillAdmin = () => {
+        setEmail('bob@nexus.com');
+        setPassword('password123');
+        setIsSignUp(false);
+    };
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -45,6 +52,15 @@ export default function Auth() {
                     </h2>
                 </div>
                 <form className="mt-8 space-y-6" onSubmit={handleAuth}>
+                    <div className="mt-4 pb-4 border-b border-gray-100 text-center">
+                        <button
+                            type="button"
+                            onClick={fillAdmin}
+                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full hover:bg-gray-200 transition-colors flex items-center gap-2 mx-auto"
+                        >
+                            <Shield size={14} /> Log in as Admin (Bob)
+                        </button>
+                    </div>
                     <div className="rounded-md shadow-sm -space-y-px">
                         {isSignUp && (
                             <div>
