@@ -4,11 +4,9 @@ import { Search, UserPlus, Mail } from 'lucide-react';
 
 interface CollaboratorManagementProps {
     projectId: string;
-    currentUser: any;
-    onAction?: () => void;
 }
 
-export default function CollaboratorManagement({ projectId, currentUser, onAction }: CollaboratorManagementProps) {
+export default function CollaboratorManagement({ projectId }: CollaboratorManagementProps) {
     const [emailSearch, setEmailSearch] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [members, setMembers] = useState<any[]>([]);
@@ -44,17 +42,9 @@ export default function CollaboratorManagement({ projectId, currentUser, onActio
     const addMember = async (userId: string) => {
         try {
             await dbService.addProjectMember(projectId, userId, selectedRole);
-            const user = searchResults.find(u => u.id === userId);
-            await dbService.logProjectAction(
-                projectId,
-                currentUser?.id,
-                'ADD_MEMBER',
-                { userName: user?.name, role: selectedRole }
-            );
             setSearchResults([]);
             setEmailSearch('');
             loadMembers();
-            if (onAction) onAction();
         } catch (error) {
             alert('User is already a member or error occurred');
         }
@@ -63,15 +53,7 @@ export default function CollaboratorManagement({ projectId, currentUser, onActio
     const updateRole = async (memberId: string, newRole: string) => {
         try {
             await dbService.updateProjectMemberRole(memberId, newRole);
-            const member = members.find(m => m.id === memberId);
-            await dbService.logProjectAction(
-                projectId,
-                currentUser?.id,
-                'UPDATE_MEMBER_ROLE',
-                { userName: member?.profiles?.name || 'User', role: newRole }
-            );
             loadMembers();
-            if (onAction) onAction();
         } catch (error) {
             console.error('Error updating role:', error);
             alert('Failed to update role');

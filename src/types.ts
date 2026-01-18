@@ -54,16 +54,6 @@ export interface Task {
     dependencies?: string[]; // IDs of prerequisite tasks
 }
 
-export interface ProjectLog {
-    id: string;
-    projectId: string;
-    userId: string;
-    action: string;
-    details: any;
-    createdAt: string;
-    userName?: string;
-}
-
 export enum CRStatus {
     SUBMITTED = 'SUBMITTED',
     IMPACT_ANALYSIS = 'IMPACT_ANALYSIS',

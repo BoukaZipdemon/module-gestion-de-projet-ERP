@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Project, Task, TaskStatus, ProjectLog } from '../types';
+import { Project, Task, TaskStatus } from '../types';
 import { generateProjectWBS, generateStatusReport } from '../services/geminiService';
 import { dbService } from '../services/dbService';
-import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search, Users, Settings, Clock, History } from 'lucide-react';
+import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search, Users, Settings, Clock, Check } from 'lucide-react';
 import CollaboratorManagement from './CollaboratorManagement';
 
 interface ProjectDetailProps {
@@ -12,6 +12,10 @@ interface ProjectDetailProps {
     onAddTask: (task: Partial<Task>) => Promise<Task | undefined>;
     onUpdateProject: (id: string, updates: Partial<Project>) => Promise<void>;
     onUpdateTask: (id: string, updates: Partial<Task>) => Promise<void>;
+    onDeleteTask: (id: string) => Promise<void>;
+    onDeleteProject: (id: string) => Promise<void>;
+    crs: any[];
+    timesheets: any[];
 }
 
 const parseDate = (str: string) => {
@@ -38,14 +42,15 @@ const TASK_STYLES = {
     [TaskStatus.DONE]: { base: 'bg-emerald-100 border-emerald-300', fill: 'bg-emerald-600', text: 'text-emerald-700' },
 };
 
-const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUser, onAddTask, onUpdateProject, onUpdateTask }) => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'wbs' | 'gantt' | 'collaborators' | 'logs'>('overview');
-    const [projectLogs, setProjectLogs] = useState<ProjectLog[]>([]);
+const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUser, onAddTask, onUpdateProject, onUpdateTask, onDeleteTask, onDeleteProject, crs, timesheets }) => {
+    const [activeTab, setActiveTab] = useState<'overview' | 'wbs' | 'gantt' | 'collaborators' | 'changes' | 'timesheets'>('overview');
     const [isGeneratingWBS, setIsGeneratingWBS] = useState(false);
     const [reportText, setReportText] = useState('');
     const [showEditModal, setShowEditModal] = useState(false);
     const [editProject, setEditProject] = useState<Partial<Project>>({});
     const [wbsDraft, setWbsDraft] = useState<any[]>([]);
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     const [viewMode, setViewMode] = useState<'comfortable' | 'compact'>('comfortable');
     const [showGanttSidebar, setShowGanttSidebar] = useState(true);
@@ -53,6 +58,40 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
 
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [dependencySearch, setDependencySearch] = useState('');
+
+    const handleEditTask = (task: Task) => {
+        setEditingTaskId(task.id);
+        setNewTask({
+            name: task.name,
+            startDate: task.startDate,
+            endDate: task.endDate,
+            status: task.status,
+            progress: task.progress,
+            assigneeId: task.assigneeId || '',
+            dependencies: task.dependencies || []
+        });
+        setShowTaskModal(true);
+    };
+
+    const handleDeleteTaskClick = async (taskId: string) => {
+        if (confirm('Are you sure you want to delete this task?')) {
+            await onDeleteTask(taskId);
+        }
+    };
+
+    const handleAddTaskClick = () => {
+        setEditingTaskId(null);
+        setNewTask({
+            name: '',
+            startDate: project.startDate,
+            endDate: project.endDate,
+            status: TaskStatus.TODO,
+            progress: 0,
+            dependencies: [],
+            assigneeId: ''
+        });
+        setShowTaskModal(true);
+    };
     const [newTask, setNewTask] = useState<Partial<Task>>({
         name: '',
         startDate: project.startDate,
@@ -63,24 +102,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
         assigneeId: ''
     });
 
-    const refreshLogs = async () => {
+    const loadMembers = async () => {
         try {
-            const logs = await dbService.getProjectLogs(project.id);
-            setProjectLogs(logs);
+            const members = await dbService.getProjectMembers(project.id);
+            setProjectMembers(members || []);
         } catch (err) {
-            console.error("Error loading project logs:", err);
+            console.error("Error loading members:", err);
         }
     };
 
     useEffect(() => {
-        refreshLogs();
+        loadMembers();
     }, [project.id]);
-
-    useEffect(() => {
-        if (activeTab === 'logs') {
-            refreshLogs();
-        }
-    }, [activeTab]);
 
     const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
     const [dragOffsetPixels, setDragOffsetPixels] = useState<number>(0);
@@ -110,13 +143,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
         onUpdateTask(taskId, {
             progress,
             status: newStatus
-        }).then(() => {
-            dbService.logProjectAction(
-                project.id,
-                currentUser?.id,
-                'UPDATE_PROGRESS',
-                { taskName: currentTask?.name, progress }
-            ).then(() => refreshLogs());
         });
     };
 
@@ -239,7 +265,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
         try {
             const generatedTasks = JSON.parse(jsonString);
             if (Array.isArray(generatedTasks)) {
-                setWbsDraft(generatedTasks);
+                setWbsDraft(generatedTasks.map(t => ({
+                    ...t,
+                    status: TaskStatus.TODO,
+                    progress: 0,
+                    startDate: project.startDate,
+                    endDate: project.endDate
+                })));
             }
         } catch (e) {
             console.error("Failed to parse WBS", e);
@@ -248,26 +280,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
     };
 
     const handleAcceptDraft = async () => {
-        if (wbsDraft.length === 0) return;
-
         for (const t of wbsDraft) {
             await onAddTask({
-                name: t.name,
-                projectId: project.id,
-                status: TaskStatus.TODO,
-                startDate: project.startDate,
-                endDate: project.endDate,
-                progress: 0
+                ...t,
+                projectId: project.id
             });
         }
-
-        await dbService.logProjectAction(
-            project.id,
-            currentUser?.id,
-            'GENERATE_WBS',
-            { count: wbsDraft.length }
-        );
-        refreshLogs();
         setWbsDraft([]);
     };
 
@@ -290,18 +308,17 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
 
     const handleSaveTask = () => {
         if (!newTask.name) return;
-        onAddTask({
-            ...newTask,
-            projectId: project.id
-        }).then((task) => {
-            dbService.logProjectAction(
-                project.id,
-                currentUser?.id,
-                'ADD_TASK',
-                { taskId: task?.id || 'new', taskName: newTask.name }
-            ).then(() => refreshLogs());
-        });
+
+        if (editingTaskId) {
+            onUpdateTask(editingTaskId, newTask);
+        } else {
+            onAddTask({
+                ...newTask,
+                projectId: project.id
+            });
+        }
         setShowTaskModal(false);
+        setEditingTaskId(null);
         setNewTask({
             name: '',
             startDate: project.startDate,
@@ -315,14 +332,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
     };
 
     const handleSaveProjectEdit = () => {
-        onUpdateProject(project.id, editProject).then(() => {
-            dbService.logProjectAction(
-                project.id,
-                currentUser?.id,
-                'EDIT_PROJECT',
-                { changes: editProject }
-            ).then(() => refreshLogs());
-        });
+        onUpdateProject(project.id, editProject);
         setShowEditModal(false);
     };
 
@@ -418,7 +428,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                         { id: 'wbs', label: 'WBS & Tasks', icon: CheckSquare },
                         { id: 'gantt', label: 'Gantt Chart', icon: Calendar },
                         { id: 'collaborators', label: 'Collaborators', icon: Users },
-                        { id: 'logs', label: 'Activity Logs', icon: History },
+                        { id: 'changes', label: 'Changes', icon: FileDown },
+                        { id: 'timesheets', label: 'Time', icon: Clock },
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -461,6 +472,37 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
 
                 {activeTab === 'wbs' && (
                     <div className="p-6">
+                        {wbsDraft.length > 0 && (
+                            <div className="mb-8 bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-sm animate-in fade-in slide-in-from-top-4">
+                                <div className="flex justify-between items-center mb-4 border-b border-blue-100 pb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200"><Wand2 size={24} /></div>
+                                        <div>
+                                            <h3 className="font-bold text-gray-900 text-lg">AI-Generated Project Plan</h3>
+                                            <p className="text-sm text-blue-700 font-medium">Review the suggested tasks for your project.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setWbsDraft([])} className="px-5 py-2.5 text-blue-600 hover:bg-blue-100 rounded-xl font-bold transition-all">Discard Plan</button>
+                                        <button onClick={handleAcceptDraft} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center gap-2">
+                                            <Check size={18} />
+                                            Apply Project Plan
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto p-2">
+                                    {wbsDraft.map((t, i) => (
+                                        <div key={i} className="bg-white p-4 rounded-xl border border-blue-100 flex items-center justify-between group hover:shadow-md transition-all">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-100">{i + 1}</div>
+                                                <span className="text-sm font-semibold text-gray-700 truncate">{t.name}</span>
+                                            </div>
+                                            <button onClick={() => setWbsDraft(prev => prev.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><X size={18} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex justify-between mb-4 flex-wrap gap-2">
                             <h3 className="text-lg font-semibold">Work Breakdown Structure</h3>
                             <div className="flex gap-2">
@@ -470,10 +512,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
                                 >
                                     <Wand2 size={16} />
-                                    {isGeneratingWBS ? 'Generating Suggestions...' : 'AI Suggest Tasks'}
+                                    {isGeneratingWBS ? 'Generating...' : 'AI Suggest Tasks'}
                                 </button>
                                 <button
-                                    onClick={() => setShowTaskModal(true)}
+                                    onClick={handleAddTaskClick}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                                 >
                                     <Plus size={16} />
@@ -481,44 +523,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                 </button>
                             </div>
                         </div>
-
-                        {wbsDraft.length > 0 && (
-                            <div className="mb-8 bg-purple-50 border border-purple-100 rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                                <div className="p-4 bg-purple-100/50 flex justify-between items-center border-b border-purple-100">
-                                    <div className="flex items-center gap-2 text-purple-800 font-bold">
-                                        <Wand2 size={18} />
-                                        AI Suggested WBS Draft
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setWbsDraft([])}
-                                            className="px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors"
-                                        >
-                                            Discard
-                                        </button>
-                                        <button
-                                            onClick={handleAcceptDraft}
-                                            className="px-4 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-md shadow-purple-200 transition-all active:scale-95"
-                                        >
-                                            Accept & Add all {wbsDraft.length} Tasks
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-4 overflow-x-auto">
-                                    <div className="flex gap-3 flex-wrap">
-                                        {wbsDraft.map((t, idx) => (
-                                            <div key={idx} className="bg-white px-3 py-2 rounded-lg border border-purple-100 shadow-sm flex items-center gap-2 text-sm text-purple-900">
-                                                <span className="w-5 h-5 rounded-full bg-purple-50 flex items-center justify-center text-[10px] font-bold text-purple-400 border border-purple-100">
-                                                    {idx + 1}
-                                                </span>
-                                                <span className="font-medium">{t.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         <div className="border rounded-lg overflow-x-auto">
                             <table className="w-full text-sm text-left min-w-[600px]">
                                 <thead className="bg-gray-50 text-gray-700 font-medium">
@@ -528,6 +532,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                         <th className="px-4 py-3">Dependencies</th>
                                         <th className="px-4 py-3">Status</th>
                                         <th className="px-4 py-3 w-40">Progress</th>
+                                        <th className="px-4 py-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -535,9 +540,20 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                         <tr><td colSpan={5} className="p-4 text-center text-gray-500">No tasks defined yet.</td></tr>
                                     )}
                                     {tasks.map(t => (
-                                        <tr key={t.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                                            <td className="px-4 py-3 text-gray-500">{t.assigneeId ? 'Charlie Dev' : 'Unassigned'}</td>
+                                        <tr key={t.id} className="hover:bg-gray-50 group">
+                                            <td className="px-4 py-3 font-medium text-gray-900 line-clamp-1 h-full flex items-center">{t.name}</td>
+                                            <td className="px-4 py-3 text-gray-500">
+                                                <div className="flex items-center gap-2">
+                                                    {t.assigneeId ? (
+                                                        <>
+                                                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 border border-blue-200 uppercase">
+                                                                {projectMembers.find(m => m.profiles.id === t.assigneeId)?.profiles.name.substring(0, 2) || '??'}
+                                                            </div>
+                                                            <span className="text-sm">{projectMembers.find(m => m.profiles.id === t.assigneeId)?.profiles.name || 'Unknown'}</span>
+                                                        </>
+                                                    ) : <span className="text-gray-400 italic text-xs">Unassigned</span>}
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3 text-gray-500">
                                                 {t.dependencies?.length ? (
                                                     <div className="flex flex-wrap gap-1">
@@ -572,6 +588,24 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                                         className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:bg-gray-300 transition-colors"
                                                     />
                                                     <span className="text-xs font-medium text-gray-700 w-8 text-right">{t.progress}%</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => handleEditTask(t)}
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                        title="Edit Task"
+                                                    >
+                                                        <Settings size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTaskClick(t.id)}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        title="Delete Task"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -816,64 +850,98 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                     <CollaboratorManagement
                         projectId={project.id}
                         currentUser={currentUser}
-                        onAction={refreshLogs}
                     />
                 )}
 
-                {activeTab === 'logs' && (
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden min-h-[400px]">
-                        <div className="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <History size={18} className="text-blue-600" />
-                                Project Activity History
-                            </h3>
-                            <button onClick={refreshLogs} className="p-1.5 text-gray-400 hover:text-blue-600 rounded transition-colors" title="Refresh Logs">
-                                <Clock size={16} />
-                            </button>
+
+
+                {activeTab === 'changes' && (
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900">Change Requests</h3>
                         </div>
-                        <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto">
-                            {projectLogs.length === 0 && (
-                                <div className="text-center py-12 text-gray-500 italic">
-                                    No activity recorded yet for this project.
+                        <div className="space-y-4">
+                            {crs.length === 0 ? (
+                                <div className="text-center py-12 text-gray-500 italic bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                    No change requests submitted for this project.
                                 </div>
-                            )}
-                            {projectLogs.map((log) => (
-                                <div key={log.id} className="flex gap-4 p-4 bg-white rounded-lg border border-gray-100 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-all">
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 opacity-20 group-hover:opacity-100 transition-opacity"></div>
-                                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold shrink-0">
-                                        {log.userName?.charAt(0)}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start mb-1 gap-2">
-                                            <p className="text-sm font-bold text-gray-900 truncate">
-                                                {log.userName}
-                                            </p>
-                                            <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap bg-gray-50 px-2 py-0.5 rounded border">
-                                                {new Date(log.createdAt).toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-700 flex flex-wrap items-center gap-1.5">
-                                            <span className="font-semibold text-blue-600 px-1.5 py-0.5 bg-blue-50 rounded border border-blue-100">
-                                                {log.action.replace(/_/g, ' ')}
-                                            </span>
-                                            {log.details.taskName && <span>on <span className="font-medium text-gray-900 italic">"{log.details.taskName}"</span></span>}
-                                            {log.details.progress !== undefined && <span>to <span className="font-bold text-gray-900">{log.details.progress}%</span></span>}
-                                            {log.details.count !== undefined && <span>({log.details.count} items)</span>}
-                                            {log.details.userName && <span>for <span className="font-medium text-gray-900">{log.details.userName}</span></span>}
-                                        </p>
-                                        {log.details.changes && (
-                                            <div className="mt-2 text-[10px] text-gray-500 bg-gray-50 p-2 rounded border border-dashed border-gray-200 flex flex-wrap gap-x-4 gap-y-1">
-                                                {Object.entries(log.details.changes).map(([k, v]: [string, any]) => (
-                                                    <span key={k} className="flex gap-1.5">
-                                                        <span className="capitalize text-gray-400 font-medium">{k}:</span>
-                                                        <span className="text-gray-900 font-semibold">{String(v)}</span>
-                                                    </span>
-                                                ))}
+                            ) : (
+                                crs.map(cr => (
+                                    <div key={cr.id} className="p-4 border rounded-xl hover:border-blue-200 transition-all bg-white shadow-sm flex flex-col sm:flex-row justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <h4 className="font-bold text-gray-900 truncate">{cr.title}</h4>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${cr.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                    cr.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        'bg-amber-50 text-amber-700 border-amber-200'
+                                                    }`}>
+                                                    {cr.status}
+                                                </span>
                                             </div>
-                                        )}
+                                            <p className="text-xs text-gray-600 mb-4 line-clamp-2">{cr.description}</p>
+                                            <div className="flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-gray-500">
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-400 capitalize">Cost Impact</span>
+                                                    <span className="font-semibold text-gray-900">${cr.costImpact?.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-400 capitalize">Time Impact</span>
+                                                    <span className="font-semibold text-gray-900">{cr.timeImpactDays} Days</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'timesheets' && (
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900">Project Timesheets</h3>
+                        </div>
+                        <div className="border rounded-xl overflow-hidden shadow-sm">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium">
+                                    <tr>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">User</th>
+                                        <th className="p-4">Description</th>
+                                        <th className="p-4 text-center">Hours</th>
+                                        <th className="p-4 text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50 bg-white">
+                                    {timesheets.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">No time recorded for this project yet.</td></tr>
+                                    ) : (
+                                        timesheets.map(entry => (
+                                            <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="p-4 text-gray-600 font-medium">{new Date(entry.date).toLocaleDateString()}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-xs font-bold text-blue-600 border border-blue-100 uppercase">
+                                                            {entry.user_id?.substring(0, 2)}
+                                                        </div>
+                                                        <span className="text-gray-900 font-medium">User</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-gray-500 text-xs italic line-clamp-1">{entry.description || 'N/A'}</td>
+                                                <td className="p-4 text-center font-bold text-blue-600">{entry.hours}</td>
+                                                <td className="p-4 text-right">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${entry.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        'bg-amber-50 text-amber-700 border-amber-200'
+                                                        }`}>
+                                                        {entry.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
@@ -997,14 +1065,26 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                             </div>
                         </div>
 
-                        <div className="mt-8 flex justify-end gap-3">
-                            <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium">Cancel</button>
+                        <div className="mt-8 flex justify-between gap-3">
                             <button
-                                onClick={handleSaveProjectEdit}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md font-medium transition-colors"
+                                onClick={() => {
+                                    if (confirm('Permanently delete this project and all its data?')) {
+                                        onDeleteProject(project.id);
+                                    }
+                                }}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium border border-red-100"
                             >
-                                Save Changes
+                                Delete Project
                             </button>
+                            <div className="flex gap-3">
+                                <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium">Cancel</button>
+                                <button
+                                    onClick={handleSaveProjectEdit}
+                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm font-bold"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1014,7 +1094,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold">Add New Task</h2>
+                            <h2 className="text-xl font-bold">{editingTaskId ? 'Edit Task' : 'Add New Task'}</h2>
                             <button onClick={() => setShowTaskModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <X size={20} />
                             </button>
@@ -1126,7 +1206,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                 disabled={!newTask.name}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Create Task
+                                {editingTaskId ? 'Save Changes' : 'Create Task'}
                             </button>
                         </div>
                     </div>

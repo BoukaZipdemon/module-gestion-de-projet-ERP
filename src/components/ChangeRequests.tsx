@@ -1,15 +1,26 @@
 import React from 'react';
-import { ChangeRequest, CRStatus } from '../types';
+import { ChangeRequest, CRStatus, Project } from '../types';
 import { analyzeCRImpact } from '../services/geminiService';
-import { AlertTriangle, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, FileText } from 'lucide-react';
 
 interface ChangeRequestsProps {
     crs: ChangeRequest[];
+    projects: Project[];
     onApprove: (id: string) => void;
     onReject: (id: string) => void;
+    onCreateCR: (cr: Partial<ChangeRequest>) => void;
 }
 
-const ChangeRequests: React.FC<ChangeRequestsProps> = ({ crs, onApprove, onReject }) => {
+const ChangeRequests: React.FC<ChangeRequestsProps> = ({ crs, projects, onApprove, onReject, onCreateCR }) => {
+    const [showModal, setShowModal] = React.useState(false);
+    const [newCR, setNewCR] = React.useState<Partial<ChangeRequest>>({
+        title: '',
+        description: '',
+        impact: '',
+        costImpact: 0,
+        timeImpactDays: 0,
+        projectId: ''
+    });
     const [analysisResult, setAnalysisResult] = React.useState<Record<string, string>>({});
     const [analyzingId, setAnalyzingId] = React.useState<string | null>(null);
 
@@ -36,7 +47,10 @@ const ChangeRequests: React.FC<ChangeRequestsProps> = ({ crs, onApprove, onRejec
                     <h1 className="text-2xl font-bold text-gray-900">Change Requests</h1>
                     <p className="text-sm text-gray-500">Review and approve scope changes</p>
                 </div>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">
+                <button
+                    onClick={() => setShowModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
+                >
                     Create Change Request
                 </button>
             </div>
@@ -107,6 +121,99 @@ const ChangeRequests: React.FC<ChangeRequestsProps> = ({ crs, onApprove, onRejec
                     </div>
                 ))}
             </div>
+
+            {showModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-900 border-l-4 border-blue-600 pl-3">New Change Request</h2>
+                            <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><XCircle size={24} className="text-gray-400" /></button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Project</label>
+                                <select
+                                    className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:outline-none transition-all"
+                                    value={newCR.projectId}
+                                    onChange={e => setNewCR({ ...newCR, projectId: e.target.value })}
+                                >
+                                    <option value="">Select a project...</option>
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
+                                <input
+                                    className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:outline-none transition-all"
+                                    placeholder="Brief title of the change"
+                                    value={newCR.title}
+                                    onChange={e => setNewCR({ ...newCR, title: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+                                <textarea
+                                    className="w-full border-2 border-gray-100 rounded-xl p-3 h-32 focus:border-blue-500 focus:outline-none transition-all resize-none"
+                                    placeholder="Detailed explanation of what needs to change and why..."
+                                    value={newCR.description}
+                                    onChange={e => setNewCR({ ...newCR, description: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Cost Impact ($)</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:outline-none transition-all"
+                                        value={newCR.costImpact}
+                                        onChange={e => setNewCR({ ...newCR, costImpact: Number(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Time Impact (Days)</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 focus:outline-none transition-all"
+                                        value={newCR.timeImpactDays}
+                                        onChange={e => setNewCR({ ...newCR, timeImpactDays: Number(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="flex-1 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-xl transition-all font-semibold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!newCR.title || !newCR.projectId) return;
+                                    onCreateCR(newCR);
+                                    setShowModal(false);
+                                    setNewCR({
+                                        title: '',
+                                        description: '',
+                                        impact: '',
+                                        costImpact: 0,
+                                        timeImpactDays: 0,
+                                        projectId: ''
+                                    });
+                                }}
+                                disabled={!newCR.title || !newCR.projectId}
+                                className="flex-[2] px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Submit Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
