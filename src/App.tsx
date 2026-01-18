@@ -117,10 +117,14 @@ function AppContent() {
 
     const handleUpdateTask = async (taskId: string, updates: Partial<Task>): Promise<void> => {
         try {
-            await dbService.updateTask(taskId, updates);
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+            console.log('handleUpdateTask called:', { taskId, updates });
+            const updatedTask = await dbService.updateTask(taskId, updates);
+            console.log('Task updated in DB, received:', updatedTask);
+            setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
+            console.log('State updated successfully');
         } catch (error) {
             console.error('Error updating task:', error);
+            alert(`Failed to update task: ${error.message || 'Unknown error'}`);
         }
     };
 

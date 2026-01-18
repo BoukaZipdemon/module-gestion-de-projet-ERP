@@ -70,6 +70,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
             status: task.status,
             progress: task.progress,
             assigneeId: task.assigneeId || '',
+            budget: task.budget || 0,
             dependencies: task.dependencies || []
         });
         setShowTaskModal(true);
@@ -89,6 +90,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
             endDate: project.endDate,
             status: TaskStatus.TODO,
             progress: 0,
+            budget: 0,
             dependencies: [],
             assigneeId: ''
         });
@@ -100,6 +102,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
         endDate: project.endDate,
         status: TaskStatus.TODO,
         progress: 0,
+        budget: 0,
         dependencies: [],
         assigneeId: ''
     });
@@ -269,12 +272,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
 
         setIsGeneratingWBS(true);
         setWbsDraft([]); // Clear previous draft
-        
+
         try {
             console.log('Starting WBS generation...');
             const jsonString = await generateProjectWBS(project.description);
             console.log('Received response:', jsonString);
-            
+
             if (!jsonString || jsonString.trim().length === 0) {
                 throw new Error('Empty response from AI');
             }
@@ -355,7 +358,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                 if (result && result.id) {
                     // Map task name to its ID for dependency resolution
                     taskNameToIdMap[t.name] = result.id;
-                    
+
                     // Store dependency information for later
                     if (t.dependencies && Array.isArray(t.dependencies) && t.dependencies.length > 0) {
                         tasksWithDependencies.push({
@@ -424,9 +427,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
     const handleSaveTask = () => {
         if (!newTask.name) return;
 
+        console.log('Saving task:', { editingTaskId, newTask });
+
         if (editingTaskId) {
+            console.log('Updating task:', editingTaskId, newTask);
             onUpdateTask(editingTaskId, newTask);
         } else {
+            console.log('Adding new task:', newTask);
             onAddTask({
                 ...newTask,
                 projectId: project.id
@@ -440,6 +447,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
             endDate: project.endDate,
             status: TaskStatus.TODO,
             progress: 0,
+            budget: 0,
             dependencies: [],
             assigneeId: ''
         });
@@ -572,7 +580,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                     <Wand2 size={16} />
                                     Generate AI Report
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleDownloadPDF}
                                     disabled={isGeneratingPDF}
                                     className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -664,6 +672,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                         <th className="px-4 py-3">Task Name</th>
                                         <th className="px-4 py-3">Assignee</th>
                                         <th className="px-4 py-3">Dependencies</th>
+                                        <th className="px-4 py-3">Budget</th>
                                         <th className="px-4 py-3">Status</th>
                                         <th className="px-4 py-3 w-40">Progress</th>
                                         <th className="px-4 py-3 text-right">Actions</th>
@@ -701,6 +710,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                                         })}
                                                     </div>
                                                 ) : <span className="text-gray-400 italic">None</span>}
+                                            </td>
+                                            <td className="px-4 py-3 font-medium text-gray-700">
+                                                ${(t.budget || 0).toLocaleString()}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-0.5 rounded text-xs border ${t.status === TaskStatus.DONE ? 'bg-green-50 text-green-700 border-green-200' :
@@ -1264,6 +1276,31 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                                         onChange={e => setNewTask({ ...newTask, endDate: e.target.value })}
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Budget ($)</label>
+                                    <input
+                                        type="number"
+                                        className="w-full border rounded-lg p-2"
+                                        value={newTask.budget}
+                                        onChange={e => setNewTask({ ...newTask, budget: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
+                                <select
+                                    className="w-full border rounded-lg p-2 bg-white"
+                                    value={newTask.assigneeId || ''}
+                                    onChange={e => setNewTask({ ...newTask, assigneeId: e.target.value })}
+                                >
+                                    <option value="">Unassigned</option>
+                                    {projectMembers.map(member => (
+                                        <option key={member.profiles.id} value={member.profiles.id}>
+                                            {member.profiles.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div>

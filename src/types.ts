@@ -51,6 +51,7 @@ export interface Task {
     assigneeId?: string;
     status: TaskStatus;
     progress: number;
+    budget: number;
     dependencies?: string[]; // IDs of prerequisite tasks
 }
 
