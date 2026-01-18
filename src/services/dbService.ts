@@ -79,12 +79,12 @@ export const dbService = {
             try {
                 const { error: memberError } = await supabase
                     .from('project_members')
-                    .insert([{ 
-                        project_id: data.id, 
-                        user_id: project.managerId, 
-                        role: 'OWNER' 
+                    .insert([{
+                        project_id: data.id,
+                        user_id: project.managerId,
+                        role: 'OWNER'
                     }]);
-                
+
                 if (memberError) {
                     console.error('Error adding project creator as member:', memberError);
                     console.warn('Project was created but creator was not added as member. Project ID:', data.id);

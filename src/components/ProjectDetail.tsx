@@ -527,33 +527,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                         </div>
                         <p className="text-gray-500 max-w-2xl">{project.description}</p>
                     </div>
-                    <div className="flex gap-4 items-start">
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200 min-w-[280px]">
-                            <p className="text-xs font-medium text-blue-600 mb-3">Budget Breakdown</p>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-600">Project Budget:</span>
-                                    <span className="text-sm font-bold text-gray-900">${project.budget.toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-600">Task Allocated:</span>
-                                    <span className="text-sm font-semibold text-orange-600">
-                                        ${tasks.reduce((acc, t) => acc + (t.budget || 0), 0).toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center pt-2 border-t border-blue-200">
-                                    <span className="text-xs font-medium text-green-700">Spent (Done):</span>
-                                    <span className="text-sm font-bold text-green-700">
-                                        ${tasks.filter(t => t.status === TaskStatus.DONE).reduce((acc, t) => acc + (t.budget || 0), 0).toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-600">Remaining:</span>
-                                    <span className="text-sm font-semibold text-gray-700">
-                                        ${(tasks.reduce((acc, t) => acc + (t.budget || 0), 0) - tasks.filter(t => t.status === TaskStatus.DONE).reduce((acc, t) => acc + (t.budget || 0), 0)).toLocaleString()}
-                                    </span>
-                                </div>
-                            </div>
+                    <div className="flex gap-4 items-center">
+                        <div className="text-right">
+                            <p className="text-sm text-gray-500">Budget</p>
+                            <p className="text-xl font-bold text-gray-900">${project.budget.toLocaleString()}</p>
                         </div>
                         <button
                             onClick={() => {
