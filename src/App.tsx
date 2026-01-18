@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { dbService } from './services/dbService';
 import {
@@ -7,7 +7,8 @@ import {
     Task,
     ChangeRequest,
     CRStatus,
-    ProjectStatus
+    ProjectStatus,
+    TimesheetEntry
 } from './types';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -128,12 +129,65 @@ function AppContent() {
         }
     };
 
-    const handleApproveCR = (id: string) => {
-        setCrs(crs.map(cr => cr.id === id ? { ...cr, status: CRStatus.APPROVED } : cr));
+    const handleDeleteTask = async (taskId: string): Promise<void> => {
+        try {
+            await dbService.deleteTask(taskId);
+            setTasks(prev => prev.filter(t => t.id !== taskId));
+        } catch (error) {
+            console.error('Error deleting task:', error);
+        }
     };
 
-    const handleRejectCR = (id: string) => {
-        setCrs(crs.map(cr => cr.id === id ? { ...cr, status: CRStatus.REJECTED } : cr));
+    const handleDeleteProject = async (projectId: string): Promise<void> => {
+        try {
+            await dbService.deleteProject(projectId);
+            setProjects(prev => prev.filter(p => p.id !== projectId));
+            navigate('/projects');
+        } catch (error) {
+            console.error('Error deleting project:', error);
+        }
+    };
+
+    const handleApproveCR = async (id: string) => {
+        try {
+            await dbService.updateChangeRequestStatus(id, CRStatus.APPROVED);
+            setCrs(prev => prev.map(cr => cr.id === id ? { ...cr, status: CRStatus.APPROVED } : cr));
+        } catch (error) {
+            console.error('Error approving CR:', error);
+        }
+    };
+
+    const handleRejectCR = async (id: string) => {
+        try {
+            await dbService.updateChangeRequestStatus(id, CRStatus.REJECTED);
+            setCrs(prev => prev.map(cr => cr.id === id ? { ...cr, status: CRStatus.REJECTED } : cr));
+        } catch (error) {
+            console.error('Error rejecting CR:', error);
+        }
+    };
+
+    const handleAddCR = async (cr: Partial<ChangeRequest>) => {
+        try {
+            const newCR = await dbService.addChangeRequest({
+                ...cr,
+                requesterId: session?.user?.id
+            });
+            setCrs(prev => [newCR, ...prev]);
+        } catch (error) {
+            console.error('Error adding CR:', error);
+        }
+    };
+
+    const handleAddTimesheet = async (entry: Partial<TimesheetEntry>) => {
+        try {
+            const newEntry = await dbService.addTimesheetEntry({
+                ...entry,
+                userId: session?.user?.id
+            });
+            setTimesheets(prev => [newEntry, ...prev]);
+        } catch (error) {
+            console.error('Error adding timesheet:', error);
+        }
     };
 
     return (
@@ -160,10 +214,14 @@ function AppContent() {
                         onAddTask={handleAddTask}
                         onUpdateProject={handleUpdateProject}
                         onUpdateTask={handleUpdateTask}
+                        onDeleteTask={handleDeleteTask}
+                        onDeleteProject={handleDeleteProject}
+                        crs={crs}
+                        timesheets={timesheets}
                     />
                 } />
-                <Route path="/changes" element={<ChangeRequests crs={crs} onApprove={handleApproveCR} onReject={handleRejectCR} />} />
-                <Route path="/timesheets" element={<Timesheets entries={timesheets} projects={projects} tasks={tasks} />} />
+                <Route path="/changes" element={<ChangeRequests crs={crs} projects={projects} onApprove={handleApproveCR} onReject={handleRejectCR} onCreateCR={handleAddCR} />} />
+                <Route path="/timesheets" element={<Timesheets entries={timesheets} projects={projects} tasks={tasks} onAddEntry={handleAddTimesheet} />} />
                 <Route path="/settings" element={
                     <div className="p-8 text-center text-gray-500">
                         <h2 className="text-xl font-bold text-gray-900 mb-2">System Configuration</h2>
@@ -180,7 +238,7 @@ function AppContent() {
     );
 }
 
-function ProjectDetailWrapper({ projects, tasks, currentUser, onAddTask, onUpdateProject, onUpdateTask }: any) {
+function ProjectDetailWrapper({ projects, tasks, currentUser, onAddTask, onUpdateProject, onUpdateTask, onDeleteTask, onDeleteProject, crs, timesheets }: any) {
     const { id } = useParams();
     const project = projects.find((p: any) => p.id === id);
     if (!project) return <div>Project not found</div>;
@@ -192,11 +250,15 @@ function ProjectDetailWrapper({ projects, tasks, currentUser, onAddTask, onUpdat
             onAddTask={onAddTask}
             onUpdateProject={onUpdateProject}
             onUpdateTask={onUpdateTask}
+            onDeleteTask={onDeleteTask}
+            onDeleteProject={onDeleteProject}
+            crs={crs.filter((c: any) => c.projectId === project.id)}
+            timesheets={timesheets.filter((t: any) => t.projectId === project.id)}
         />
     );
 }
 
-import { useParams } from 'react-router-dom';
+
 
 function App() {
     return (

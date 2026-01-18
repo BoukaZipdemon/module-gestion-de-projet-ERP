@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { Project, Task, ChangeRequest, TimesheetEntry, ProjectLog } from '../types';
+import { Project, Task, ChangeRequest, TimesheetEntry } from '../types';
 
 export const dbService = {
     // Profiles
@@ -96,6 +96,14 @@ export const dbService = {
         if (error) throw error;
     },
 
+    async deleteProject(projectId: string): Promise<void> {
+        const { error } = await supabase
+            .from('projects')
+            .delete()
+            .eq('id', projectId);
+        if (error) throw error;
+    },
+
     // Tasks
     async getTasks(projectId?: string): Promise<Task[]> {
         let query = supabase.from('tasks').select('*');
@@ -125,7 +133,7 @@ export const dbService = {
                 name: task.name,
                 start_date: task.startDate,
                 end_date: task.endDate,
-                assignee_id: task.assigneeId,
+                assignee_id: task.assigneeId && task.assigneeId.length > 5 ? task.assigneeId : null,
                 status: task.status,
                 progress: task.progress || 0,
                 dependencies: task.dependencies || []
@@ -156,10 +164,19 @@ export const dbService = {
                 progress: updates.progress,
                 assignee_id: updates.assigneeId,
                 start_date: updates.startDate,
-                end_date: updates.endDate
+                end_date: updates.endDate,
+                dependencies: updates.dependencies
             })
             .eq('id', taskId);
 
+        if (error) throw error;
+    },
+
+    async deleteTask(taskId: string): Promise<void> {
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
         if (error) throw error;
     },
 
@@ -186,6 +203,45 @@ export const dbService = {
         }));
     },
 
+    async updateChangeRequestStatus(id: string, status: string): Promise<void> {
+        const { error } = await supabase
+            .from('change_requests')
+            .update({ status })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async addChangeRequest(cr: Partial<ChangeRequest>): Promise<ChangeRequest> {
+        const { data, error } = await supabase
+            .from('change_requests')
+            .insert([{
+                project_id: cr.projectId,
+                title: cr.title,
+                description: cr.description,
+                impact: cr.impact,
+                cost_impact: cr.costImpact,
+                time_impact_days: cr.timeImpactDays,
+                status: cr.status || 'SUBMITTED',
+                requester_id: cr.requesterId
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return {
+            id: data.id,
+            projectId: data.project_id,
+            title: data.title,
+            description: data.description,
+            impact: data.impact,
+            costImpact: Number(data.cost_impact),
+            timeImpactDays: data.time_impact_days,
+            status: data.status,
+            requesterId: data.requester_id,
+            createdAt: data.created_at
+        };
+    },
+
     // Timesheets
     async getTimesheets(): Promise<TimesheetEntry[]> {
         const { data, error } = await supabase
@@ -207,12 +263,48 @@ export const dbService = {
         }));
     },
 
+    async addTimesheetEntry(entry: Partial<TimesheetEntry>): Promise<TimesheetEntry> {
+        const { data, error } = await supabase
+            .from('timesheets')
+            .insert([{
+                user_id: entry.userId,
+                project_id: entry.projectId,
+                task_id: entry.taskId,
+                date: entry.date,
+                hours: entry.hours,
+                description: entry.description,
+                status: entry.status || 'APPROVED'
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return {
+            id: data.id,
+            userId: data.user_id,
+            projectId: data.project_id,
+            taskId: data.task_id,
+            date: data.date,
+            hours: Number(data.hours),
+            description: data.description,
+            status: data.status as any
+        };
+    },
+
+    async updateTimesheetStatus(id: string, status: string): Promise<void> {
+        const { error } = await supabase
+            .from('timesheets')
+            .update({ status })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
     // Collaborators
     async searchUsersByEmail(email: string): Promise<any[]> {
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
-            .ilike('email', `%${email}%`);
+            .ilike('email', `% ${email}% `);
         if (error) throw error;
         return data;
     },
@@ -241,33 +333,4 @@ export const dbService = {
         if (error) throw error;
     },
 
-    // Project Logging Methods
-    async logProjectAction(projectId: string, userId: string, action: string, details: any = {}): Promise<void> {
-        if (!userId || userId.length < 5) return; // Skip logging for mock/none users
-        await supabase.from('project_logs').insert([{
-            project_id: projectId,
-            user_id: userId,
-            action: action,
-            details: details
-        }]);
-    },
-
-    async getProjectLogs(projectId: string): Promise<ProjectLog[]> {
-        const { data, error } = await supabase
-            .from('project_logs')
-            .select('*, profiles(name)')
-            .eq('project_id', projectId)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return data.map((d: any) => ({
-            id: d.id,
-            projectId: d.project_id,
-            userId: d.user_id,
-            action: d.action,
-            details: d.details,
-            createdAt: d.created_at,
-            userName: d.profiles?.name || 'Unknown User'
-        }));
-    }
 };
