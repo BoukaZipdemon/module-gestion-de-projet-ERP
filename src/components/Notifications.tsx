@@ -19,6 +19,7 @@ interface NotificationsProps {
     projects: Project[];
     currentUserId: string;
     onNavigate: (path: string) => void;
+    onNavigateToProject?: (projectId: string) => void;
 }
 
 export default function Notifications({ changeRequests, tasks, projects, currentUserId, onNavigate, onNavigateToProject }: NotificationsProps) {
@@ -53,7 +54,7 @@ export default function Notifications({ changeRequests, tasks, projects, current
         });
 
         // Change requests needing approval (if user is CAB_APPROVER or ADMIN)
-        const pendingCRs = changeRequests.filter(cr => 
+        const pendingCRs = changeRequests.filter(cr =>
             cr.status === CRStatus.CAB_REVIEW || cr.status === CRStatus.IMPACT_ANALYSIS
         );
 
@@ -93,8 +94,8 @@ export default function Notifications({ changeRequests, tasks, projects, current
         });
 
         // Tasks assigned to current user (recently assigned)
-        const myTasks = tasks.filter(t => 
-            t.assigneeId === currentUserId && 
+        const myTasks = tasks.filter(t =>
+            t.assigneeId === currentUserId &&
             t.status !== TaskStatus.DONE &&
             !readNotifications.has(`task-assigned-${t.id}`)
         );
@@ -157,7 +158,7 @@ export default function Notifications({ changeRequests, tasks, projects, current
     const handleNotificationClick = (notification: Notification) => {
         // Mark as read
         setReadNotifications(prev => new Set([...prev, notification.id]));
-        
+
         // Navigate if link exists
         if (notification.link) {
             // Handle project detail routes
@@ -249,9 +250,8 @@ export default function Notifications({ changeRequests, tasks, projects, current
                                     <div
                                         key={notification.id}
                                         onClick={() => handleNotificationClick(notification)}
-                                        className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                                            !notification.read ? 'bg-blue-50/30' : ''
-                                        }`}
+                                        className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/30' : ''
+                                            }`}
                                     >
                                         <div className="flex items-start gap-3">
                                             <div className="mt-0.5">
