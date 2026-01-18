@@ -301,19 +301,48 @@ export const dbService = {
 
     // Collaborators
     async searchUsersByEmail(email: string): Promise<any[]> {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .ilike('email', `% ${email}% `);
-        if (error) throw error;
-        return data;
+        try {
+            const trimmedEmail = email.trim();
+            if (!trimmedEmail || trimmedEmail.length < 1) {
+                return [];
+            }
+
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, name, email, avatar, role')
+                .ilike('email', `%${trimmedEmail}%`)
+                .limit(20);
+            
+            if (error) {
+                console.error('Search users error:', error);
+                throw error;
+            }
+            
+            return data || [];
+        } catch (error) {
+            console.error('Error in searchUsersByEmail:', error);
+            throw error;
+        }
     },
 
     async addProjectMember(projectId: string, userId: string, role: string = 'MEMBER'): Promise<void> {
-        const { error } = await supabase
-            .from('project_members')
-            .insert([{ project_id: projectId, user_id: userId, role }]);
-        if (error) throw error;
+        try {
+            const { error } = await supabase
+                .from('project_members')
+                .insert([{ 
+                    project_id: projectId, 
+                    user_id: userId, 
+                    role: role || 'MEMBER' 
+                }]);
+            
+            if (error) {
+                console.error('Add project member error:', error);
+                throw error;
+            }
+        } catch (error) {
+            console.error('Error in addProjectMember:', error);
+            throw error;
+        }
     },
 
     async getProjectMembers(projectId: string): Promise<any[]> {

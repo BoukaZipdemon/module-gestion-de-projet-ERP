@@ -201,6 +201,10 @@ function AppContent() {
             }}
             onNavigate={(page) => navigate(`/${page}`)}
             currentPage={currentPath}
+            changeRequests={crs}
+            tasks={tasks}
+            projects={projects}
+            onNavigateToProject={(projectId) => navigate(`/projects/${projectId}`)}
         >
             <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />

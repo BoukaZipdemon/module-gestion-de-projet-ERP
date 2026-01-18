@@ -27,13 +27,36 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
     };
 
     const handleSearch = async () => {
-        if (emailSearch.length < 3) return;
+        if (emailSearch.trim().length < 3) {
+            alert('Please enter at least 3 characters to search');
+            return;
+        }
+        
         setLoading(true);
+        setSearchResults([]);
+        
         try {
-            const results = await dbService.searchUsersByEmail(emailSearch);
-            setSearchResults(results);
-        } catch (error) {
+            const results = await dbService.searchUsersByEmail(emailSearch.trim());
+            console.log('Search results:', results);
+            
+            if (results.length === 0) {
+                alert('No users found. Make sure the user has an account in the system and RLS policies are configured.');
+                return;
+            }
+            
+            // Filter out users who are already members
+            const existingMemberIds = members.map(m => m.user_id || m.profiles?.id).filter(Boolean);
+            const filteredResults = results.filter(user => !existingMemberIds.includes(user.id));
+            
+            if (filteredResults.length === 0 && results.length > 0) {
+                alert('All matching users are already members of this project.');
+            } else {
+                setSearchResults(filteredResults);
+            }
+        } catch (error: any) {
             console.error('Error searching users:', error);
+            const errorMsg = error?.message || error?.code || 'Unknown error';
+            alert(`Failed to search users: ${errorMsg}. Check console for details.`);
         } finally {
             setLoading(false);
         }
@@ -42,11 +65,21 @@ export default function CollaboratorManagement({ projectId }: CollaboratorManage
     const addMember = async (userId: string) => {
         try {
             await dbService.addProjectMember(projectId, userId, selectedRole);
-            setSearchResults([]);
+            
+            // Remove the added user from search results
+            setSearchResults(prev => prev.filter(u => u.id !== userId));
             setEmailSearch('');
-            loadMembers();
-        } catch (error) {
-            alert('User is already a member or error occurred');
+            
+            // Reload members list
+            await loadMembers();
+        } catch (error: any) {
+            console.error('Error adding member:', error);
+            
+            if (error?.code === '23505' || error?.message?.includes('unique') || error?.message?.includes('duplicate')) {
+                alert('This user is already a member of the project.');
+            } else {
+                alert(`Failed to add member: ${error?.message || 'Unknown error'}`);
+            }
         }
     };
 

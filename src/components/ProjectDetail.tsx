@@ -3,7 +3,7 @@ import { Project, Task, TaskStatus } from '../types';
 import { generateProjectWBS, generateStatusReport } from '../services/geminiService';
 import { dbService } from '../services/dbService';
 import { pdfService } from '../services/pdfService';
-import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search, Users, Settings, Clock, History } from 'lucide-react';
+import { Calendar, CheckSquare, BarChart2, Plus, Wand2, FileDown, X, Link, GripVertical, ZoomIn, ZoomOut, Percent, PanelLeftClose, PanelLeftOpen, Search, Users, Settings, Clock, History, Check } from 'lucide-react';
 import CollaboratorManagement from './CollaboratorManagement';
 
 interface ProjectDetailProps {
@@ -262,32 +262,128 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
     };
 
     const handleGenerateWBS = async () => {
+        if (!project || !project.description || project.description.trim().length === 0) {
+            alert('Please add a project description before generating tasks.');
+            return;
+        }
+
         setIsGeneratingWBS(true);
-        const jsonString = await generateProjectWBS(project.description);
+        setWbsDraft([]); // Clear previous draft
+        
         try {
-            const generatedTasks = JSON.parse(jsonString);
-            if (Array.isArray(generatedTasks)) {
-                setWbsDraft(generatedTasks.map(t => ({
-                    ...t,
+            console.log('Starting WBS generation...');
+            const jsonString = await generateProjectWBS(project.description);
+            console.log('Received response:', jsonString);
+            
+            if (!jsonString || jsonString.trim().length === 0) {
+                throw new Error('Empty response from AI');
+            }
+
+            let generatedTasks;
+            try {
+                generatedTasks = JSON.parse(jsonString);
+            } catch (parseError: any) {
+                console.error("Failed to parse WBS JSON:", parseError, "Response:", jsonString);
+                throw new Error('Invalid response format from AI. Please try again.');
+            }
+
+            if (!Array.isArray(generatedTasks)) {
+                console.error("WBS is not an array:", generatedTasks);
+                throw new Error('Invalid task format received from AI.');
+            }
+
+            if (generatedTasks.length === 0) {
+                alert('No tasks were generated. Please try again with a more detailed description.');
+                setIsGeneratingWBS(false);
+                return;
+            }
+
+            // Safely map tasks with validation
+            const validTasks = generatedTasks
+                .filter(t => t && (t.name || t.title)) // Filter out invalid tasks
+                .map(t => ({
+                    name: String(t.name || t.title || 'Unnamed Task'),
+                    dependencies: Array.isArray(t.dependencies) ? t.dependencies.map(String) : [],
                     status: TaskStatus.TODO,
                     progress: 0,
-                    startDate: project.startDate,
-                    endDate: project.endDate
-                })));
+                    startDate: project.startDate || new Date().toISOString().split('T')[0],
+                    endDate: project.endDate || new Date().toISOString().split('T')[0]
+                }));
+
+            if (validTasks.length === 0) {
+                alert('No valid tasks were generated. Please try again.');
+                setIsGeneratingWBS(false);
+                return;
             }
-        } catch (e) {
-            console.error("Failed to parse WBS", e);
+
+            console.log('Setting WBS draft with', validTasks.length, 'tasks');
+            setWbsDraft(validTasks);
+        } catch (error: any) {
+            console.error("Error generating WBS:", error);
+            const errorMessage = error?.message || 'Failed to generate tasks. Please check your API key and try again.';
+            alert(errorMessage);
+            setWbsDraft([]); // Clear on error
+        } finally {
+            setIsGeneratingWBS(false);
         }
-        setIsGeneratingWBS(false);
     };
 
     const handleAcceptDraft = async () => {
-        for (const t of wbsDraft) {
-            await onAddTask({
-                ...t,
-                projectId: project.id
-            });
+        if (wbsDraft.length === 0) {
+            return;
         }
+
+        // Step 1: Add all tasks without dependencies first
+        const taskNameToIdMap: Record<string, string> = {};
+        const tasksWithDependencies: Array<{ taskId: string; dependencyNames: string[] }> = [];
+
+        for (const t of wbsDraft) {
+            try {
+                // Add task without dependencies first
+                const taskData = {
+                    name: t.name,
+                    projectId: project.id,
+                    status: t.status || TaskStatus.TODO,
+                    progress: t.progress || 0,
+                    startDate: t.startDate || project.startDate,
+                    endDate: t.endDate || project.endDate,
+                    assigneeId: t.assigneeId || undefined,
+                    dependencies: [] // Start with empty dependencies
+                };
+
+                const result = await onAddTask(taskData);
+                if (result && result.id) {
+                    // Map task name to its ID for dependency resolution
+                    taskNameToIdMap[t.name] = result.id;
+                    
+                    // Store dependency information for later
+                    if (t.dependencies && Array.isArray(t.dependencies) && t.dependencies.length > 0) {
+                        tasksWithDependencies.push({
+                            taskId: result.id,
+                            dependencyNames: t.dependencies
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error adding task:', t.name, error);
+            }
+        }
+
+        // Step 2: Update tasks with their dependencies (convert names to IDs)
+        for (const { taskId, dependencyNames } of tasksWithDependencies) {
+            try {
+                const dependencyIds = dependencyNames
+                    .map(name => taskNameToIdMap[name])
+                    .filter(id => id !== undefined) as string[];
+
+                if (dependencyIds.length > 0) {
+                    await onUpdateTask(taskId, { dependencies: dependencyIds });
+                }
+            } catch (error) {
+                console.error('Error updating task dependencies:', taskId, error);
+            }
+        }
+
         setWbsDraft([]);
     };
 
@@ -536,9 +632,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                             <h3 className="text-lg font-semibold">Work Breakdown Structure</h3>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={handleGenerateWBS}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        try {
+                                            handleGenerateWBS();
+                                        } catch (error) {
+                                            console.error('Error in button click handler:', error);
+                                            alert('An error occurred. Please check the console for details.');
+                                        }
+                                    }}
                                     disabled={isGeneratingWBS}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors disabled:opacity-50"
                                 >
                                     <Wand2 size={16} />
                                     {isGeneratingWBS ? 'Generating...' : 'AI Suggest Tasks'}

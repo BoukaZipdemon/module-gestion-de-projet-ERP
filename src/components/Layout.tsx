@@ -8,16 +8,21 @@ import {
     Bell,
     Menu
 } from 'lucide-react';
-import { User } from '../types';
+import { User, ChangeRequest, Task, Project } from '../types';
+import Notifications from './Notifications';
 
 interface LayoutProps {
     children: React.ReactNode;
     currentUser: User;
     onNavigate: (page: string) => void;
     currentPage: string;
+    changeRequests?: ChangeRequest[];
+    tasks?: Task[];
+    projects?: Project[];
+    onNavigateToProject?: (projectId: string) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentUser, onNavigate, currentPage }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, onNavigate, currentPage, changeRequests = [], tasks = [], projects = [], onNavigateToProject }) => {
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
 
     const NavItem = ({ page, icon: Icon, label }: { page: string, icon: any, label: string }) => (
@@ -82,10 +87,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onNavigate, curr
                     </button>
 
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full">
-                            <Bell size={20} />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                        </button>
+                        <Notifications
+                            changeRequests={changeRequests}
+                            tasks={tasks}
+                            projects={projects}
+                            currentUserId={currentUser.id}
+                            onNavigate={onNavigate}
+                            onNavigateToProject={onNavigateToProject}
+                        />
                         <div className="h-8 w-px bg-gray-300 mx-2"></div>
                         <span className="text-sm text-gray-500 italic">Environment: Dev (Local)</span>
                     </div>

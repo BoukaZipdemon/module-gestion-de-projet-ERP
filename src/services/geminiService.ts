@@ -9,25 +9,84 @@ const groq = new OpenAI({
 });
 
 export async function generateProjectWBS(projectDescription: string): Promise<string> {
-    const response = await groq.chat.completions.create({
-        messages: [
-            {
-                role: "system",
-                content: "You are a project management expert. Generate a Work Breakdown Structure (WBS) for the given project description. Return ONLY a JSON array of objects with 'name' and 'dependencies' (array of strings) fields. The dependencies should refer to other task names generated."
-            },
-            {
-                role: "user",
-                content: projectDescription
-            },
-        ],
-        model: "llama-3.3-70b-versatile",
-        response_format: { type: "json_object" }
-    });
+    if (!groqApiKey) {
+        throw new Error('GROQ API key is not configured. Please set VITE_GROQ_API_KEY in your environment variables.');
+    }
 
-    const content = response.choices[0].message.content || '[]';
-    // Handle cases where the model might wrap the array in an object
-    const parsed = JSON.parse(content);
-    return JSON.stringify(Array.isArray(parsed) ? parsed : (parsed.tasks || parsed.wbs || []));
+    if (!projectDescription || projectDescription.trim().length === 0) {
+        throw new Error('Project description is required to generate tasks.');
+    }
+
+    try {
+        const response = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a project management expert. Generate a Work Breakdown Structure (WBS) for the given project description. Return ONLY a JSON array of objects with 'name' and 'dependencies' (array of strings) fields. The dependencies should refer to other task names generated. Example format: [{\"name\": \"Task 1\", \"dependencies\": []}, {\"name\": \"Task 2\", \"dependencies\": [\"Task 1\"]}]"
+                },
+                {
+                    role: "user",
+                    content: projectDescription
+                },
+            ],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" },
+            temperature: 0.7
+        });
+
+        if (!response.choices || response.choices.length === 0 || !response.choices[0].message.content) {
+            throw new Error('No response from AI. Please try again.');
+        }
+
+        const content = response.choices[0].message.content;
+        
+        // Handle cases where the model might wrap the array in an object
+        let parsed;
+        try {
+            parsed = JSON.parse(content);
+        } catch (parseError) {
+            throw new Error('Invalid JSON response from AI. Please try again.');
+        }
+
+        // Extract the array from the response
+        let tasks = [];
+        if (Array.isArray(parsed)) {
+            tasks = parsed;
+        } else if (parsed.tasks && Array.isArray(parsed.tasks)) {
+            tasks = parsed.tasks;
+        } else if (parsed.wbs && Array.isArray(parsed.wbs)) {
+            tasks = parsed.wbs;
+        } else if (parsed.items && Array.isArray(parsed.items)) {
+            tasks = parsed.items;
+        } else {
+            // Try to find any array in the object
+            const keys = Object.keys(parsed);
+            for (const key of keys) {
+                if (Array.isArray(parsed[key])) {
+                    tasks = parsed[key];
+                    break;
+                }
+            }
+        }
+
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+            throw new Error('No tasks were generated. Please try again with a more detailed description.');
+        }
+
+        return JSON.stringify(tasks);
+    } catch (error: any) {
+        if (error?.message) {
+            throw error;
+        }
+        // Handle API errors
+        if (error?.status === 401 || error?.message?.includes('api key') || error?.message?.includes('authentication')) {
+            throw new Error('Invalid API key. Please check your VITE_GROQ_API_KEY environment variable.');
+        }
+        if (error?.status === 429 || error?.message?.includes('rate limit')) {
+            throw new Error('Rate limit exceeded. Please try again in a moment.');
+        }
+        throw new Error(`Failed to generate tasks: ${error?.message || 'Unknown error'}`);
+    }
 }
 
 export async function generateStatusReport(data: { project: any; tasks: any[] }): Promise<string> {
