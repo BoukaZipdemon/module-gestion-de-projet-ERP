@@ -109,6 +109,11 @@ function AppContent() {
         try {
             const newTask = await dbService.addTask(t);
             setTasks(prev => [...prev, newTask]);
+
+            // Update project progress after adding task
+            if (newTask.projectId) {
+                await updateProjectProgress(newTask.projectId);
+            }
             return newTask;
         } catch (error) {
             console.error('Error adding task:', error);
@@ -122,9 +127,48 @@ function AppContent() {
             console.log('Task updated in DB, received:', updatedTask);
             setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
             console.log('State updated successfully');
+
+            // Update project progress after task update
+            if (updatedTask.projectId) {
+                await updateProjectProgress(updatedTask.projectId);
+            }
         } catch (error) {
             console.error('Error updating task:', error);
-            alert(`Failed to update task: ${error.message || 'Unknown error'}`);
+            alert(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+
+    // Helper function to calculate and update project progress based on tasks
+    const updateProjectProgress = async (projectId: string) => {
+        try {
+            // Need to fetch fresh tasks or use current state + updates? 
+            // Better to calculate from current state (which is already updated) to avoid extra fetch,
+            // but for simplicity and correctness with async state updates, let's filter the local `tasks` 
+            // Note: `tasks` in this closure might be stale if strict mode or rapid updates.
+            // However, since we updated state right before, we should be careful.
+            // A safer approach is re-fetching or passing the new task list. 
+            // Given the architecture, let's filter the current `tasks` state but we must be aware `tasks` is from render scope.
+
+            // Actually, calculating from the 'tasks' state variable inside this function will use the *current render's* tasks
+            // which DOES NOT yet include the update we just did in `setTasks` unless we wait for re-render.
+            // THIS IS A SUBTLE BUG in the previous implementation.
+            // We should use the raw data from DB or calculate based on the change.
+            // Let's re-fetch tasks for that project to be 100% sure of the progress.
+            const projectTasks = await dbService.getTasks(projectId);
+
+            if (projectTasks.length === 0) {
+                await dbService.updateProject(projectId, { progress: 0 });
+                setProjects(prev => prev.map(p => p.id === projectId ? { ...p, progress: 0 } : p));
+                return;
+            }
+
+            const totalProgress = projectTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+            const averageProgress = Math.round(totalProgress / projectTasks.length);
+
+            await dbService.updateProject(projectId, { progress: averageProgress });
+            setProjects(prev => prev.map(p => p.id === projectId ? { ...p, progress: averageProgress } : p));
+        } catch (error) {
+            console.error('Error updating project progress:', error);
         }
     };
 
@@ -139,8 +183,15 @@ function AppContent() {
 
     const handleDeleteTask = async (taskId: string): Promise<void> => {
         try {
+            const taskToDelete = tasks.find(t => t.id === taskId);
+            const projectId = taskToDelete?.projectId;
+
             await dbService.deleteTask(taskId);
             setTasks(prev => prev.filter(t => t.id !== taskId));
+
+            if (projectId) {
+                await updateProjectProgress(projectId);
+            }
         } catch (error) {
             console.error('Error deleting task:', error);
         }
