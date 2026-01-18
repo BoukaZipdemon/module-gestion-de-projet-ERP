@@ -1280,6 +1280,22 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, tasks, currentUs
                             </div>
 
                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
+                                <select
+                                    className="w-full border rounded-lg p-2"
+                                    value={newTask.assigneeId || ''}
+                                    onChange={e => setNewTask({ ...newTask, assigneeId: e.target.value })}
+                                >
+                                    <option value="">Unassigned</option>
+                                    {projectMembers.map(member => (
+                                        <option key={member.profiles.id} value={member.profiles.id}>
+                                            {member.profiles.name} ({member.profiles.role})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                                     <Link size={16} /> Dependencies
                                 </label>

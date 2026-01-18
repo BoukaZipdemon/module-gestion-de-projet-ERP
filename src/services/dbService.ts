@@ -273,7 +273,7 @@ export const dbService = {
                 date: entry.date,
                 hours: entry.hours,
                 description: entry.description,
-                status: entry.status || 'APPROVED'
+                status: entry.status || 'DRAFT'
             }])
             .select()
             .single();
@@ -312,12 +312,12 @@ export const dbService = {
                 .select('id, name, email, avatar, role')
                 .ilike('email', `%${trimmedEmail}%`)
                 .limit(20);
-            
+
             if (error) {
                 console.error('Search users error:', error);
                 throw error;
             }
-            
+
             return data || [];
         } catch (error) {
             console.error('Error in searchUsersByEmail:', error);
@@ -329,12 +329,12 @@ export const dbService = {
         try {
             const { error } = await supabase
                 .from('project_members')
-                .insert([{ 
-                    project_id: projectId, 
-                    user_id: userId, 
-                    role: role || 'MEMBER' 
+                .insert([{
+                    project_id: projectId,
+                    user_id: userId,
+                    role: role || 'MEMBER'
                 }]);
-            
+
             if (error) {
                 console.error('Add project member error:', error);
                 throw error;

@@ -7,9 +7,12 @@ interface TimesheetsProps {
     projects: Project[];
     tasks: Task[];
     onAddEntry: (entry: Partial<TimesheetEntry>) => void;
+    onApprove: (id: string) => void;
+    onReject: (id: string) => void;
+    currentUser: any;
 }
 
-const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAddEntry }) => {
+const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAddEntry, onApprove, onReject, currentUser }) => {
     const [showModal, setShowModal] = React.useState(false);
     const [newEntry, setNewEntry] = React.useState<Partial<TimesheetEntry>>({
         projectId: '',
@@ -21,6 +24,8 @@ const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAdd
 
     const projectTasks = tasks.filter(t => t.projectId === newEntry.projectId);
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+    const validEntries = entries.filter(entry => projects.some(p => p.id === entry.projectId));
 
     return (
         <div className="space-y-6">
@@ -51,13 +56,16 @@ const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAdd
                                 <th key={d} className="px-4 py-4 font-medium text-gray-700 text-sm w-24 text-center">{d}</th>
                             ))}
                             <th className="px-6 py-4 font-medium text-gray-700 text-sm text-right">Total</th>
+                            {(currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN') && (
+                                <th className="px-6 py-4 font-medium text-gray-700 text-sm text-right">Actions</th>
+                            )}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {entries.length === 0 ? (
+                        {validEntries.length === 0 ? (
                             <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500 italic">No time entries recorded yet.</td></tr>
                         ) : (
-                            entries.map(entry => {
+                            validEntries.map(entry => {
                                 const project = projects.find(p => p.id === entry.projectId);
                                 const task = tasks.find(t => t.id === entry.taskId);
                                 return (
@@ -80,13 +88,35 @@ const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAdd
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="font-bold text-gray-900">{entry.hours.toFixed(1)}</span>
-                                                <span className={`text - [10px] font - bold px - 1.5 py - 0.5 rounded border uppercase mt - 1 ${entry.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase mt-1 ${entry.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
                                                     'bg-amber-50 text-amber-700 border-amber-200'
                                                     } `}>
                                                     {entry.status}
                                                 </span>
                                             </div>
                                         </td>
+                                        {(currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN') && (
+                                            <td className="px-6 py-4 text-right">
+                                                {entry.status !== 'APPROVED' && entry.status !== 'REJECTED' && (
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => onApprove(entry.id)}
+                                                            className="p-1.5 text-green-600 hover:bg-green-50 border border-green-200 rounded-lg transition-colors"
+                                                            title="Approve"
+                                                        >
+                                                            <Check size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onReject(entry.id)}
+                                                            className="p-1.5 text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors"
+                                                            title="Reject"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })
@@ -101,10 +131,11 @@ const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAdd
                             <td className="text-center font-medium text-gray-700 py-4">8</td>
                             <td className="text-center font-medium text-gray-700 py-4">8</td>
                             <td className="text-right font-bold text-blue-600 px-6 py-4 text-lg">40.0</td>
+                            {(currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN') && <td></td>}
                         </tr>
                     </tfoot>
                 </table>
-            </div>
+            </div >
 
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -210,7 +241,7 @@ const Timesheets: React.FC<TimesheetsProps> = ({ entries, projects, tasks, onAdd
                     </div>
                 </div>
             )}
-        </div>
+        </div >
     );
 };
 

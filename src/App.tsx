@@ -190,6 +190,24 @@ function AppContent() {
         }
     };
 
+    const handleApproveTimesheet = async (id: string) => {
+        try {
+            await dbService.updateTimesheetStatus(id, 'APPROVED');
+            setTimesheets(prev => prev.map(t => t.id === id ? { ...t, status: 'APPROVED' } : t));
+        } catch (error) {
+            console.error('Error approving timesheet:', error);
+        }
+    };
+
+    const handleRejectTimesheet = async (id: string) => {
+        try {
+            await dbService.updateTimesheetStatus(id, 'REJECTED');
+            setTimesheets(prev => prev.map(t => t.id === id ? { ...t, status: 'REJECTED' } : t));
+        } catch (error) {
+            console.error('Error rejecting timesheet:', error);
+        }
+    };
+
     return (
         <Layout
             currentUser={{
@@ -224,8 +242,8 @@ function AppContent() {
                         timesheets={timesheets}
                     />
                 } />
-                <Route path="/changes" element={<ChangeRequests crs={crs} projects={projects} onApprove={handleApproveCR} onReject={handleRejectCR} onCreateCR={handleAddCR} />} />
-                <Route path="/timesheets" element={<Timesheets entries={timesheets} projects={projects} tasks={tasks} onAddEntry={handleAddTimesheet} />} />
+                <Route path="/changes" element={<ChangeRequests crs={crs} projects={projects} onApprove={handleApproveCR} onReject={handleRejectCR} onCreateCR={handleAddCR} currentUser={profile} />} />
+                <Route path="/timesheets" element={<Timesheets entries={timesheets} projects={projects} tasks={tasks} onAddEntry={handleAddTimesheet} onApprove={handleApproveTimesheet} onReject={handleRejectTimesheet} currentUser={profile} />} />
                 <Route path="/settings" element={
                     <div className="p-8 text-center text-gray-500">
                         <h2 className="text-xl font-bold text-gray-900 mb-2">System Configuration</h2>
