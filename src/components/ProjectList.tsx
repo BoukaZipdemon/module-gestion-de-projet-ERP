@@ -21,6 +21,20 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProject, on
     });
     const [isGenerating, setIsGenerating] = React.useState(false);
     const [isChatOpen, setIsChatOpen] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [statusFilter, setStatusFilter] = React.useState<ProjectStatus | 'ALL'>('ALL');
+
+    const filteredProjects = React.useMemo(() => {
+        return projects.filter(project => {
+            const matchesSearch =
+                project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                project.code.toLowerCase().includes(searchQuery.toLowerCase());
+
+            const matchesStatus = statusFilter === 'ALL' || project.status === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [projects, searchQuery, statusFilter]);
 
     const handleGenerateIdea = async () => {
         if (!newProject.name) return;
@@ -67,12 +81,23 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProject, on
                             type="text"
                             placeholder="Search projects by code or name..."
                             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50">
-                        <Filter size={18} />
-                        Filter
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <Filter size={18} className="text-gray-400" />
+                        <select
+                            className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                        >
+                            <option value="ALL">All Statuses</option>
+                            {Object.values(ProjectStatus).map(status => (
+                                <option key={status} value={status}>{status.replace('_', ' ')}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -89,7 +114,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProject, on
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {projects.map((project) => (
+                            {filteredProjects.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                        No projects found matching your criteria.
+                                    </td>
+                                </tr>
+                            )}
+                            {filteredProjects.map((project) => (
                                 <tr
                                     key={project.id}
                                     onClick={() => onSelectProject(project.id)}

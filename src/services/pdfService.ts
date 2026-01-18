@@ -38,12 +38,12 @@ export const pdfService = {
         // Header
         doc.setFillColor(59, 130, 246); // Blue
         doc.rect(0, 0, pageWidth, 40, 'F');
-        
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(24);
         doc.setFont('helvetica', 'bold');
         doc.text('Executive Dashboard Report', 20, 25);
-        
+
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.text(`Generated: ${data.generatedAt.toLocaleString()}`, 20, 35);
@@ -67,7 +67,7 @@ export const pdfService = {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        
+
         const summaryData = [
             ['Active Projects', activeProjects.toString()],
             ['Completed Projects', completedProjects.toString()],
@@ -100,7 +100,7 @@ export const pdfService = {
         doc.text('Project Portfolio', 20, yPosition);
         yPosition += 10;
 
-        const projectTableData = data.projects.length > 0 
+        const projectTableData = data.projects.length > 0
             ? data.projects.map(p => [
                 p.code || 'N/A',
                 p.name || 'Unnamed Project',
@@ -250,16 +250,16 @@ export const pdfService = {
         // Header
         doc.setFillColor(59, 130, 246);
         doc.rect(0, 0, pageWidth, 50, 'F');
-        
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(20);
         doc.setFont('helvetica', 'bold');
         doc.text('Project Status Report', 20, 30);
-        
+
         doc.setFontSize(12);
         doc.setFont('helvetica', 'normal');
         doc.text(data.project.name, 20, 40);
-        
+
         doc.setFontSize(9);
         doc.text(`Generated: ${data.generatedAt.toLocaleString()}`, 20, 47);
 
@@ -274,7 +274,7 @@ export const pdfService = {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        
+
         const startDate = data.project.startDate ? new Date(data.project.startDate) : new Date();
         const endDate = data.project.endDate ? new Date(data.project.endDate) : new Date();
         const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -331,6 +331,7 @@ export const pdfService = {
             const taskTableData = data.tasks.map(t => [
                 t.name,
                 t.status.replace('_', ' '),
+                `$${(t.budget || 0).toLocaleString()}`,
                 `${t.progress}%`,
                 new Date(t.startDate).toLocaleDateString(),
                 new Date(t.endDate).toLocaleDateString(),
@@ -339,18 +340,19 @@ export const pdfService = {
 
             autoTable(doc, {
                 startY: yPosition,
-                head: [['Task Name', 'Status', 'Progress', 'Start Date', 'End Date', 'Assignment']],
+                head: [['Task Name', 'Status', 'Budget', 'Progress', 'Start Date', 'End Date', 'Assignment']],
                 body: taskTableData,
                 theme: 'striped',
                 headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
                 styles: { fontSize: 8, cellPadding: 3 },
                 columnStyles: {
                     0: { cellWidth: 60 },
-                    1: { cellWidth: 30 },
-                    2: { cellWidth: 25, halign: 'center' },
-                    3: { cellWidth: 30 },
-                    4: { cellWidth: 30 },
-                    5: { cellWidth: 30 }
+                    1: { cellWidth: 25 },
+                    2: { cellWidth: 25, halign: 'right' },
+                    3: { cellWidth: 20, halign: 'center' },
+                    4: { cellWidth: 25 },
+                    5: { cellWidth: 25 },
+                    6: { cellWidth: 25 }
                 }
             });
 

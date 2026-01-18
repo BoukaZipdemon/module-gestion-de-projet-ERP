@@ -53,20 +53,53 @@ export const dbService = {
             .insert([{
                 code: project.code,
                 name: project.name,
-                description: project.description,
-                start_date: project.startDate,
-                end_date: project.endDate,
+                description: project.description || null,
+                start_date: project.startDate && project.startDate.trim() !== '' ? project.startDate : null,
+                end_date: project.endDate && project.endDate.trim() !== '' ? project.endDate : null,
                 status: project.status,
-                budget: project.budget,
+                budget: project.budget || 0,
                 manager_id: project.managerId && project.managerId.length > 5 ? project.managerId : null, // Handle non-UUID mock IDs
                 progress: project.progress || 0
             }])
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error creating project:', error);
+            throw error;
+        }
 
-        return {
+        if (!data) {
+            throw new Error('Project creation failed: No data returned');
+        }
+
+        // Automatically add the creator (managerId) as a project member with OWNER role
+        // This ensures the creator can see the project after refresh
+        if (project.managerId && project.managerId.length > 5) {
+            try {
+                const { error: memberError } = await supabase
+                    .from('project_members')
+                    .insert([{
+                        project_id: data.id,
+                        user_id: project.managerId,
+                        role: 'OWNER'
+                    }]);
+
+                if (memberError) {
+                    console.error('Error adding project creator as member:', memberError);
+                    console.warn('Project was created but creator was not added as member. Project ID:', data.id);
+                    // Don't throw here - project was created successfully, member addition is secondary
+                } else {
+                    console.log('Successfully added creator as project member');
+                }
+            } catch (memberError) {
+                console.error('Exception while adding project creator as member:', memberError);
+                console.warn('Project was created but creator was not added as member. Project ID:', data.id);
+                // Don't throw here - project was created successfully, member addition is secondary
+            }
+        }
+
+        const result = {
             id: data.id,
             code: data.code,
             name: data.name,
@@ -78,6 +111,9 @@ export const dbService = {
             managerId: data.manager_id,
             progress: data.progress
         };
+
+        console.log('Project created successfully:', result);
+        return result;
     },
 
     async updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
@@ -121,6 +157,7 @@ export const dbService = {
             assigneeId: t.assignee_id,
             status: t.status,
             progress: t.progress,
+            budget: Number(t.budget || 0),
             dependencies: t.dependencies
         }));
     },
@@ -136,6 +173,7 @@ export const dbService = {
                 assignee_id: task.assigneeId && task.assigneeId.length > 5 ? task.assigneeId : null,
                 status: task.status,
                 progress: task.progress || 0,
+                budget: task.budget || 0,
                 dependencies: task.dependencies || []
             }])
             .select()
@@ -151,25 +189,42 @@ export const dbService = {
             assigneeId: data.assignee_id,
             status: data.status,
             progress: data.progress,
+            budget: Number(data.budget || 0),
             dependencies: data.dependencies
         };
     },
 
-    async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-        const { error } = await supabase
+    async updateTask(taskId: string, updates: Partial<Task>): Promise<Task> {
+        const { data, error } = await supabase
             .from('tasks')
             .update({
                 name: updates.name,
                 status: updates.status,
                 progress: updates.progress,
-                assignee_id: updates.assigneeId,
+                assignee_id: updates.assigneeId && updates.assigneeId.length > 5 ? updates.assigneeId : null,
                 start_date: updates.startDate,
                 end_date: updates.endDate,
+                budget: updates.budget,
                 dependencies: updates.dependencies
             })
-            .eq('id', taskId);
+            .eq('id', taskId)
+            .select()
+            .single();
 
         if (error) throw error;
+
+        return {
+            id: data.id,
+            projectId: data.project_id,
+            name: data.name,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            assigneeId: data.assignee_id,
+            status: data.status,
+            progress: data.progress,
+            budget: Number(data.budget || 0),
+            dependencies: data.dependencies
+        };
     },
 
     async deleteTask(taskId: string): Promise<void> {
