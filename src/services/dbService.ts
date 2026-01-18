@@ -121,6 +121,7 @@ export const dbService = {
             assigneeId: t.assignee_id,
             status: t.status,
             progress: t.progress,
+            budget: Number(t.budget || 0),
             dependencies: t.dependencies
         }));
     },
@@ -136,6 +137,7 @@ export const dbService = {
                 assignee_id: task.assigneeId && task.assigneeId.length > 5 ? task.assigneeId : null,
                 status: task.status,
                 progress: task.progress || 0,
+                budget: task.budget || 0,
                 dependencies: task.dependencies || []
             }])
             .select()
@@ -151,25 +153,42 @@ export const dbService = {
             assigneeId: data.assignee_id,
             status: data.status,
             progress: data.progress,
+            budget: Number(data.budget || 0),
             dependencies: data.dependencies
         };
     },
 
-    async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-        const { error } = await supabase
+    async updateTask(taskId: string, updates: Partial<Task>): Promise<Task> {
+        const { data, error } = await supabase
             .from('tasks')
             .update({
                 name: updates.name,
                 status: updates.status,
                 progress: updates.progress,
-                assignee_id: updates.assigneeId,
+                assignee_id: updates.assigneeId && updates.assigneeId.length > 5 ? updates.assigneeId : null,
                 start_date: updates.startDate,
                 end_date: updates.endDate,
+                budget: updates.budget,
                 dependencies: updates.dependencies
             })
-            .eq('id', taskId);
+            .eq('id', taskId)
+            .select()
+            .single();
 
         if (error) throw error;
+
+        return {
+            id: data.id,
+            projectId: data.project_id,
+            name: data.name,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            assigneeId: data.assignee_id,
+            status: data.status,
+            progress: data.progress,
+            budget: Number(data.budget || 0),
+            dependencies: data.dependencies
+        };
     },
 
     async deleteTask(taskId: string): Promise<void> {
@@ -312,12 +331,12 @@ export const dbService = {
                 .select('id, name, email, avatar, role')
                 .ilike('email', `%${trimmedEmail}%`)
                 .limit(20);
-            
+
             if (error) {
                 console.error('Search users error:', error);
                 throw error;
             }
-            
+
             return data || [];
         } catch (error) {
             console.error('Error in searchUsersByEmail:', error);
@@ -329,12 +348,12 @@ export const dbService = {
         try {
             const { error } = await supabase
                 .from('project_members')
-                .insert([{ 
-                    project_id: projectId, 
-                    user_id: userId, 
-                    role: role || 'MEMBER' 
+                .insert([{
+                    project_id: projectId,
+                    user_id: userId,
+                    role: role || 'MEMBER'
                 }]);
-            
+
             if (error) {
                 console.error('Add project member error:', error);
                 throw error;

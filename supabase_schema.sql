@@ -33,6 +33,7 @@ CREATE TABLE public.tasks (
   assignee_id UUID REFERENCES public.profiles(id),
   status TEXT CHECK (status IN ('TODO', 'IN_PROGRESS', 'REVIEW', 'DONE')) DEFAULT 'TODO',
   progress INTEGER DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+  budget NUMERIC DEFAULT 0,
   dependencies UUID[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
