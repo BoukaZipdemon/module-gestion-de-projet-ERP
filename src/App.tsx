@@ -264,6 +264,7 @@ function AppContent() {
             setTimesheets(prev => prev.map(t => t.id === id ? { ...t, status: 'REJECTED' } : t));
         } catch (error) {
             console.error('Error rejecting timesheet:', error);
+            alert(`Failed to reject timesheet. Please ensure the database schema supports 'REJECTED' status. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 

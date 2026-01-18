@@ -61,7 +61,7 @@ CREATE TABLE public.timesheets (
   date DATE NOT NULL,
   hours NUMERIC NOT NULL,
   description TEXT,
-  status TEXT CHECK (status IN ('DRAFT', 'SUBMITTED', 'APPROVED')) DEFAULT 'DRAFT',
+  status TEXT CHECK (status IN ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED')) DEFAULT 'DRAFT',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
