@@ -94,10 +94,14 @@ function AppContent() {
                 progress: 0,
                 managerId: session.user.id
             };
+            console.log('Creating project with data:', projectData);
             const newProject = await dbService.addProject(projectData as Project);
+            console.log('Project created, adding to state:', newProject);
             setProjects([newProject, ...projects]);
+            console.log('Project added to state successfully');
         } catch (error) {
             console.error('Error adding project:', error);
+            alert(`Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
